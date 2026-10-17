@@ -1,0 +1,84 @@
+# ETHOS / EDITH 生产部署编排
+#
+# 拓扑：
+#   Internet → nginx(80/443) → web(Next.js :3000, BFF) → backend(FastAPI :8080)
+#                                                        └→ SQLite + workspace-volumes (卷)
+#
+# 用法：
+#   cp .env.production.example .env   # 填真实值
+#   docker compose up -d --build
+#
+# 注意：根目录原 docker-compose.yml 指向已废弃的 Go 版 backend-v2，此文件已替换。
+
+name: ethos
+
+services:
+  backend:
+    build:
+      context: ./backend-py
+    env_file:
+      - .env
+    environment:
+      # 容器内必须监听所有网卡，否则 web 容器访问不到
+      EDITH_ADDR: 0.0.0.0:8080
+      # 全部可变数据集中到 /app/data，由命名卷持久化
+      EDITH_DB_PATH: /app/data/edith-v2.db
+      EDITH_WORKSPACE_VOLUME_DIR: /app/data/workspace-volumes
+      EDITH_SYNC_STATE_DIR: /app/data/workspace-sync
+      # E2B Volume 尚未开通（private beta），生产期先用 local 后端
+      EDITH_WORKSPACE_VOLUME_BACKEND: ${EDITH_WORKSPACE_VOLUME_BACKEND:-local}
+    volumes:
+      - edith-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+
+  web:
+    build:
+      context: ./web-v1
+      args:
+        # NEXT_PUBLIC_* 在 build 时内联进产物，改 key 必须重建镜像
+        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+        NEXT_PUBLIC_CLERK_SIGN_IN_URL: ${NEXT_PUBLIC_CLERK_SIGN_IN_URL:-/sign-in}
+        NEXT_PUBLIC_CLERK_SIGN_UP_URL: ${NEXT_PUBLIC_CLERK_SIGN_UP_URL:-/sign-up}
+        NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL: ${NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL:-/}
+        NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL: ${NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL:-/}
+    environment:
+      # BFF 转发目标（容器名即主机名）
+      EDITH_RUNTIME_URL: http://backend:8080
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY}
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/letsencrypt:/etc/letsencrypt:ro
+      - certbot-webroot:/var/www/certbot:ro
+    depends_on:
+      - web
+    restart: unless-stopped
+
+  # 仅按需运行（不随 up -d 启动）：
+  #   docker compose run --rm certbot certonly --webroot -w /var/www/certbot \
+  #     -d your.domain --email you@example.com --agree-tos --no-eff-email
+  certbot:
+    image: certbot/certbot
+    profiles: ["certbot"]
+    volumes:
+      - ./deploy/letsencrypt:/etc/letsencrypt
+      - certbot-webroot:/var/www/certbot
+
+volumes:
+  edith-data:
+  certbot-webroot:

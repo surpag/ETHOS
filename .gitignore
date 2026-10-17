@@ -1,0 +1,108 @@
+# ---------- Secrets ----------
+.env
+.env.*
+!.env.example
+!**/.env.example
+!.env.production.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# TLS 证书（certbot 签发，含私钥，禁止入库）
+/deploy/letsencrypt/
+
+# ---------- JavaScript / Next.js ----------
+**/node_modules/
+**/.venv/
+**/__pycache__/
+/web/.next/
+/web/tsconfig.tsbuildinfo
+
+# ---------- Go runtime ----------
+/backend/.gocache/
+/backend/state/
+/backend/workspace/
+/workspace/
+/backend/*.db
+/backend/*.db-shm
+/backend/*.db-wal
+*.exe
+*.exe~
+/backend/demo
+
+# ---------- Local tools and IDE ----------
+**/.idea/
+/.vscode/
+/.agent/
+/.kilo/
+/.mcp.json
+**/.codegraph/
+
+# ---------- OS ----------
+.DS_Store
+Thumbs.db
+
+
+# ---- 源码参考目录 ----
+reference/
+
+
+# 试验场地
+test/
+.forward/
+forward/
+.gemini/
+
+edith.db
+/backend-v1/*.db
+/backend-v1/*.db-shm
+/backend-v1/*.db-wal
+
+.idea/
+edith-architecture-3d.html
+.tmp-go-cache
+
+**/**.db
+**/**.db-shm
+**/**.db-wal
+edith-architecture-v2.html
+.agents/skills/
+.claude/
+
+# ---------- 已废弃的旧实现（新仓库只保留 backend-py + web-v1）----------
+/backend/
+/backend-v1/
+/backend-v2/
+/web/
+/edith-studio/
+
+# ---------- 临时备份目录 ----------
+/backend-py-tmp/
+/web-v1-tmp/
+
+# ---------- 构建产物 / 缓存 ----------
+**/.next/
+**/*.tsbuildinfo
+**/.pytest_cache/
+**/.ruff_cache/
+
+# ---------- 运行期数据（SQLite / 工作区 / 同步共识状态）----------
+/backend-py/workspace-volumes/
+/backend-py/workspace-sync/
+/backend-py/db_backup/
+/edith-v2.db
+
+# 排查进程/数据库锁时留下的临时输出
+/backend-py/kill*.txt
+/backend-py/proc_*.txt
+
+# ---------- 本地 AI / 编辑器工作目录 ----------
+/.workbuddy/
+/.codex/
+
+# ---------- 个人材料（不进代码仓库）----------
+/resume.md
+/docs/agent-interview-prep.md
+/docs/interview-notes.md
+/docs/偏好.md

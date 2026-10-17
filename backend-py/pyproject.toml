@@ -1,0 +1,37 @@
+[project]
+name = "edith-backend"
+version = "0.1.0"
+description = "EDITH 的 Python 重写版：多用户服务端 AI Agent 平台（1:1 对齐 Go 版功能）"
+readme = "README.md"
+authors = [
+    { name = "wjh", email = "3222423227@qq.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.34",
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+    "aiosqlite>=0.22.1",
+    "openai>=1.0",
+    "e2b>=2.0",
+    "croniter>=6.0",
+    "tzdata>=2024.1",
+    "python-multipart>=0.0.9",
+    "cos-python-sdk-v5>=1.9",
+]
+
+[project.scripts]
+edith-backend = "edith_backend.main:main"
+edith-trace = "edith_backend.internal.trace.viewer:main"
+
+[build-system]
+requires = ["uv_build>=0.12.1,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "ruff>=0.9",
+]

@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# 虚拟环境
+.venv/
+
+# 环境变量
+.env
+
+# 数据库
+*.db
+*.db-wal
+*.db-shm
+
+# 工具
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
