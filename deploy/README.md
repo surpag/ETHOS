@@ -323,23 +323,105 @@ docker compose logs -f tunnel     # 出现 "Registered tunnel connection" 即成
 全部在命名卷 `ethos_edith-data`（容器内 `/app/data`）：
 
 ```
-/app/data/edith-v2.db          # SQLite 全部业务数据
+/app/data/edith-v2.db          # SQLite 全部业务数据（会话 / 消息 / 用量 / 工作区 / 凭据）
 /app/data/workspace-volumes/   # 工作区文件（local 后端）
-/app/data/workspace-sync/      # 双向同步共识状态
+/app/data/workspace-sync/      # 双向同步共识状态（删除传播依赖它）
 ```
 
-### 备份（建议每天）
+卷名规则是 `<compose 项目名>_<卷名>`，本项目 compose 里写了 `name: ethos`，所以是 `ethos_edith-data`。
+
+> 下文路径以 `/opt/ethos` 为例；若你 `git clone` 到了 `/opt/ethos/ETHOS`，自行替换。
+
+### 什么操作会/不会丢数据
+
+| 操作 | 数据 |
+|---|---|
+| `docker compose restart` / `up -d` / `down`（**不加 `-v`**） | 保留 |
+| `docker compose up -d --build`（重建镜像） | 保留 |
+| `git pull` | 保留 |
+| **`docker compose down -v`** | ⚠️ **删除卷 = 清空数据库**，永远不要加 `-v` |
+| 换机器 / `docker system prune --volumes` | 丢失，只能靠备份 |
+
+### 备份（每天自动）
+
+`backend` 镜像里**没有 `sqlite3` CLI**（python:3.13-slim），所以用 Python 的 backup API 做热备——
+它走 SQLite 的在线备份协议，**能正确包含 WAL 里尚未 checkpoint 的数据**（直接 `cp` 那个 `.db` 会丢最近的写入）。
 
 ```bash
 mkdir -p /opt/backup
+
+cat > /opt/backup/backup.sh <<'EOF'
+#!/bin/sh
+set -e
+cd /opt/ethos
+# 1) 热备 SQLite（不停服，不阻塞写入）
+docker compose exec -T backend python -c "import sqlite3; s=sqlite3.connect('/app/data/edith-v2.db'); d=sqlite3.connect('/app/data/.snapshot.db'); s.backup(d); d.close(); s.close()"
+# 2) 整个 /app/data 打包（含 DB 快照 + 工作区文件 + 同步状态）
 docker run --rm -v ethos_edith-data:/data -v /opt/backup:/backup alpine \
-  tar czf /backup/ethos-$(date +%F).tar.gz -C /data .
-# 保留最近 14 天
+  sh -c 'cd /data && tar czf /backup/ethos-$(date +%F_%H%M).tar.gz . && rm -f /data/.snapshot.db'
+# 3) 保留 14 天
 find /opt/backup -name 'ethos-*.tar.gz' -mtime +14 -delete
+EOF
+
+chmod +x /opt/backup/backup.sh
+/opt/backup/backup.sh          # 先手动跑一次确认成功
+echo '0 3 * * * root /opt/backup/backup.sh' > /etc/cron.d/ethos-backup
 ```
 
-> SQLite 是单文件，**必须停服或热备**。上面的 tar 方式在写入瞬间可能不一致；严谨做法：  
-> `docker compose exec backend sqlite3 /app/data/edith-v2.db ".backup /app/data/backup.db"` 后再打包。
+校验备份是完整可解压的（不是 0 字节的坏包）：
+
+```bash
+tar tzf /opt/backup/ethos-*.tar.gz | head
+```
+
+### 恢复
+
+```bash
+cd /opt/ethos
+docker compose stop backend
+
+# ⚠️ 这会清空当前卷内容再解压，确认你选的是想恢复的那个备份
+docker run --rm -v ethos_edith-data:/data -v /opt/backup:/backup alpine \
+  sh -c 'cd /data && find . -mindepth 1 -delete && tar xzf /backup/ethos-2026-10-18_0300.tar.gz'
+
+docker compose start backend
+docker compose logs --tail=20 backend
+```
+
+### 跨环境迁移数据（**Clerk 实例不同则 userId 不同**）
+
+这是最容易踩的坑：本地 `.env` 用 `pk_test_/sk_test_`（开发实例），线上一旦用 `pk_live_/sk_live_`（生产实例），
+**同一个邮箱登录，Clerk 在两个实例里给出的是两个不同的 `user_xxx`**。后端所有数据按 `user_id` 隔离，
+所以把本地库原样搬过去，登录后依然「一条数据都看不到」。
+
+迁移时必须改 `user_id`。先分别查两边：
+
+```bash
+# 本地
+sqlite3 backend-py/edith-v2.db "SELECT DISTINCT user_id FROM session_meta;"
+
+# 线上（容器内没有 sqlite3 CLI，用 python）
+docker compose exec -T backend python -c "import sqlite3;print(sqlite3.connect('/app/data/edith-v2.db').execute('SELECT DISTINCT user_id FROM session_meta').fetchall())"
+```
+
+拿到 `旧ID` / `新ID` 后，遍历**所有含 `user_id` 列的表**统一改写（不要手写表名，加表就漏了）：
+
+```python
+import sqlite3
+db = sqlite3.connect("/app/data/edith-v2.db")
+old, new = "user_旧", "user_新"
+tables = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+for t in tables:
+    cols = [r[1] for r in db.execute(f'PRAGMA table_info("{t}")')]
+    if "user_id" in cols:
+        n = db.execute(f'UPDATE "{t}" SET user_id=? WHERE user_id=?', (new, old)).rowcount
+        print(t, n)
+db.commit()
+```
+
+> 若新用户已经登录过、某些表（如 `user_agents`，主键就是 `user_id`）已有行，
+> 直接 `UPDATE` 会撞主键 —— 把语句换成 `UPDATE OR REPLACE`，或先删掉新用户那几行。
+> 全部 19 张表里用户归属列统一叫 `user_id`（含 `users` 表本身），所以按列名枚举即可，不需要维护表清单。
 
 ### 更新版本
 
