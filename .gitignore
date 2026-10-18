@@ -6,6 +6,7 @@
 !.env.production.example
 *.pem
 *.key
+/deploy/cloudflare.ini
 *.p12
 *.pfx
 

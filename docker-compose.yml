@@ -69,6 +69,19 @@ services:
       - web
     restart: unless-stopped
 
+  # Cloudflare Tunnel（可选，方案 B）：
+  #   服务器主动出站连 Cloudflare，入站流量不经过本机 80/443 —— 不需要证书、
+  #   不需要开放端口，也不受「未备案域名端口拦截」影响。
+  #   仅按需启动：docker compose --profile tunnel up -d tunnel
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    # 默认走 QUIC(UDP 7844)，出网受限时连不上；固定 http2 走 TCP 443 更稳
+    command: tunnel --no-autoupdate --protocol http2 run --token ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - nginx
+    restart: unless-stopped
+
   # 仅按需运行（不随 up -d 启动）：
   #   docker compose run --rm certbot certonly --webroot -w /var/www/certbot \
   #     -d your.domain --email you@example.com --agree-tos --no-eff-email

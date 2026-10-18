@@ -1,0 +1,14 @@
+# Cloudflare API Token（用于 DNS-01 签发证书）
+#
+# 获取：Cloudflare Dashboard → My Profile → API Tokens → Create Token
+#   权限：Zone → DNS → Edit
+#         Zone → Zone → Read
+#   Zone Resources：仅选中该域名所在的 zone
+#
+# 用法：
+#   cp deploy/cloudflare.ini.example deploy/cloudflare.ini
+#   chmod 600 deploy/cloudflare.ini
+#   # 把下面替换成真实 token
+#
+# ⚠️ 这个文件含真实凭据，已被 .gitignore 排除，不要提交。
+dns_cloudflare_api_token = REPLACE_WITH_YOUR_CLOUDFLARE_API_TOKEN
