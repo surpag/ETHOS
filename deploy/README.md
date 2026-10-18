@@ -347,26 +347,21 @@ docker compose logs -f tunnel     # 出现 "Registered tunnel connection" 即成
 `backend` 镜像里**没有 `sqlite3` CLI**（python:3.13-slim），所以用 Python 的 backup API 做热备——
 它走 SQLite 的在线备份协议，**能正确包含 WAL 里尚未 checkpoint 的数据**（直接 `cp` 那个 `.db` 会丢最近的写入）。
 
+仓库里已经备好脚本 `deploy/backup.sh`（自动定位项目目录、检查容器、清理过期备份）：
+
 ```bash
-mkdir -p /opt/backup
-
-cat > /opt/backup/backup.sh <<'EOF'
-#!/bin/sh
-set -e
 cd /opt/ethos
-# 1) 热备 SQLite（不停服，不阻塞写入）
-docker compose exec -T backend python -c "import sqlite3; s=sqlite3.connect('/app/data/edith-v2.db'); d=sqlite3.connect('/app/data/.snapshot.db'); s.backup(d); d.close(); s.close()"
-# 2) 整个 /app/data 打包（含 DB 快照 + 工作区文件 + 同步状态）
-docker run --rm -v ethos_edith-data:/data -v /opt/backup:/backup alpine \
-  sh -c 'cd /data && tar czf /backup/ethos-$(date +%F_%H%M).tar.gz . && rm -f /data/.snapshot.db'
-# 3) 保留 14 天
-find /opt/backup -name 'ethos-*.tar.gz' -mtime +14 -delete
-EOF
+chmod +x deploy/backup.sh
+./deploy/backup.sh                                  # 先手动跑一次确认成功
+ls -lh /opt/backup/
 
-chmod +x /opt/backup/backup.sh
-/opt/backup/backup.sh          # 先手动跑一次确认成功
-echo '0 3 * * * root /opt/backup/backup.sh' > /etc/cron.d/ethos-backup
+# 每天 03:00 自动执行
+echo "0 3 * * * root $PWD/deploy/backup.sh" > /etc/cron.d/ethos-backup
 ```
+
+脚本支持用环境变量覆盖默认值：`BACKUP_DIR`（默认 `/opt/backup`）、`RETENTION_DAYS`（默认 14）、
+`VOLUME`（默认 `ethos_edith-data`）。
+
 
 校验备份是完整可解压的（不是 0 字节的坏包）：
 
