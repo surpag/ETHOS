@@ -46,6 +46,16 @@ type Workspace = {
 };
 
 const emptyTimeline: Timeline = { blocks: [] };
+
+// 占位会话：新用户还没有任何会话时用它撑住渲染。
+// 必须是稳定引用 —— 它同时作为 ChatComposer 的 key，每次新建对象会导致反复重挂载。
+const emptySession: ChatSession = {
+  id: "new-session",
+  title: "新对话",
+  timeline: emptyTimeline,
+  usage: emptySessionUsage,
+};
+
 const pendingRunsKey = "edith.pending-agent-runs";
 
 type PendingRun = {
@@ -98,9 +108,7 @@ export function ChatPage() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [activeRequestID, setActiveRequestID] = useState<string | null>(null);
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
-  const [sessions, setSessions] = useState<ChatSession[]>([
-    { id: "new-session", title: "新对话", timeline: emptyTimeline, usage: emptySessionUsage },
-  ]);
+  const [sessions, setSessions] = useState<ChatSession[]>([emptySession]);
   const [activeSessionID, setActiveSessionID] = useState("new-session");
   const [activeWorkspaceID, setActiveWorkspaceID] = useState<string | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -115,7 +123,9 @@ export function ChatPage() {
   const activeRequestIDRef = useRef<string | null>(null);
   const workspaceSwitcherRef = useRef<WorkspaceSwitcherHandle>(null); // 本次新增：侧边栏"+ 添加工作区"按钮复用 WorkspaceSwitcher 的文件选择
 
-  const activeSession = sessions.find((session) => session.id === activeSessionID) ?? sessions[0];
+  // 兜底到 emptySession：sessions 理论上不会为空（初始就有占位），但一旦为空，
+  // 下面所有 `activeSession.xxx` 都会抛 TypeError → Next.js 全局错误页（无 digest）。
+  const activeSession = sessions.find((session) => session.id === activeSessionID) ?? sessions[0] ?? emptySession;
   const selectedModel = models.find((model) => model.id === modelID);
 
   // 从 localStorage 恢复当前工作区 ID（顶部切换器写入）；没有则工作区指令不注入。
@@ -255,6 +265,14 @@ export function ChatPage() {
       timeline: emptyTimeline,
       usage: emptySessionUsage,
     }));
+    // 新用户（或会话被删光）时后端返回空数组。绝不能把 sessions 清空 —— 那样
+    // activeSession 会变成 undefined，渲染时读 `activeSession.title` 直接抛错，
+    // 表现就是 Next.js 全局错误页「This page couldn't load」且没有 digest。
+    if (history.length === 0) {
+      setSessions([emptySession]);
+      setActiveSessionID(emptySession.id);
+      return history;
+    }
     setSessions(history);
     return history;
   }, []);
