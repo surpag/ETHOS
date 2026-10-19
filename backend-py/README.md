@@ -37,21 +37,27 @@ src/edith_backend/
 ├── config.py               # 环境变量加载
 ├── database.py             # SQLite 连接 + WAL
 └── internal/
-    ├── agentstream/        # 中性事件模型
-    ├── agentrun/           # 核心编排
+    ├── agentrun/           # 核心编排：准入 → 配置聚合 → 流式执行
+    ├── agentstream/        # 中性事件模型与流式解码
     ├── gateway/            # 渠道统一入口
     ├── webadapter/         # HTTP/SSE 适配器
-    ├── cronjob/            # 定时任务
-    ├── sandbox/            # E2B 沙箱
+    ├── conversation/       # Timeline 投影
+    ├── session/            # 消息、任务状态、检查点
+    ├── models/             # 内置 + 用户自定义模型目录
+    ├── userconfig/         # 设置、供应商密钥、MCP、渠道绑定
+    ├── sandbox/            # E2B 沙箱生命周期与工具集
+    ├── workspace/          # 工作区实体、存储后端与双向同步
     ├── volume/             # 持久化卷
     ├── skills/             # Skill 目录
-    ├── tools/              # 工具聚合器
-    ├── userconfig/         # 用户配置
-    ├── conversation/       # Timeline 投影
-    ├── models/             # 模型目录
     ├── images/             # COS 图片
+    ├── gitops/             # Git 推送与凭据注入
+    ├── cronjob/            # 定时任务存储与调度
+    ├── cronadapter/        # 定时执行适配
     ├── usage/              # Token 用量
-    └── systemtools/        # 系统工具
+    ├── trace/              # 链路追踪（含 CLI viewer）
+    ├── systemtools/        # 系统工具
+    ├── tools.py            # 工具注册中心
+    └── netguard.py         # 共享 SSRF / 出口校验
 ```
 
 ## 技术栈
@@ -99,5 +105,7 @@ uv run edith-backend
 - [x] 阶段 6：MCP + cronjob
 - [x] 阶段 7：images + systemtools
 - [x] 阶段 8：前端联调 + 回归（冒烟测试通过）
+- [x] 阶段 9：MCP streamable HTTP / SSE 双传输
+- [x] 阶段 10：工作区绑定、自定义模型、Git 推送、深层安全加固
 
-> 遗留：MCP runtime（远程工具连接）待接入 mcp SDK。
+> 当前测试规模：`tests/` 下 220+ 用例，覆盖迁移、同步删除传播、用量核算、Git 推送与 MCP。

@@ -1,0 +1,336 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1640" height="1820" viewBox="0 0 1640 1820" font-family="'Segoe UI','Microsoft YaHei',sans-serif">
+<defs>
+  <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#555"/>
+  </marker>
+  <marker id="ahd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#888"/>
+  </marker>
+</defs>
+<rect x="24" y="60" width="1592" height="216" rx="14" fill="#E3F2FD" stroke="#1565C0" stroke-width="1.6" stroke-dasharray="0"/>
+<text x="44" y="90" font-size="17" font-weight="bold" fill="#0D2B52">① 前端 web-v1（Next.js 16 + Clerk 认证）</text>
+<rect x="24" y="320" width="1592" height="300" rx="14" fill="#FFF3E0" stroke="#EF6C00" stroke-width="1.6" stroke-dasharray="0"/>
+<text x="44" y="350" font-size="17" font-weight="bold" fill="#5C2E00">② backend-py HTTP 边界（FastAPI · 默认 127.0.0.1:8080）</text>
+<rect x="24" y="650" width="1592" height="438" rx="14" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.6" stroke-dasharray="0"/>
+<text x="44" y="680" font-size="17" font-weight="bold" fill="#143B18">③ 核心执行链（gateway → agentrun）</text>
+<rect x="24" y="1116" width="1592" height="426" rx="14" fill="#F3E5F5" stroke="#7B1FA2" stroke-width="1.6" stroke-dasharray="0"/>
+<text x="44" y="1146" font-size="17" font-weight="bold" fill="#3A0B4E">④ 数据与支撑模块（经组合根 main.py 注入）</text>
+<rect x="24" y="1570" width="1592" height="186" rx="14" fill="#FFEBEE" stroke="#C62828" stroke-width="1.6" stroke-dasharray="0"/>
+<text x="44" y="1600" font-size="17" font-weight="bold" fill="#5C1010">⑤ 外部依赖</text>
+<line x1="633.9" y1="254.0" x2="361.0" y2="364.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="429.9" y="301.0" width="135.2" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="497.5" y="312.0" font-size="10.5" fill="#333" text-anchor="middle">messages:stream · runs</text>
+<line x1="727.0" y1="254.0" x2="590.5" y2="364.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="577.1" y="301.0" width="163.2" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="658.7" y="312.0" font-size="10.5" fill="#333" text-anchor="middle">GET /internal/conversations</text>
+<line x1="820.0" y1="254.0" x2="820.0" y2="364.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="727.2" y="301.0" width="185.6" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="820.0" y="312.0" font-size="10.5" fill="#333" text-anchor="middle">GET·PUT /internal/user-settings</text>
+<line x1="913.0" y1="254.0" x2="1049.5" y2="364.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="891.3" y="301.0" width="180.0" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="981.3" y="312.0" font-size="10.5" fill="#333" text-anchor="middle">GET /internal/available-models</text>
+<line x1="1006.1" y1="254.0" x2="1279.0" y2="364.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="1080.5" y="301.0" width="124.0" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="1142.5" y="312.0" font-size="10.5" fill="#333" text-anchor="middle">GET /internal/skills</text>
+<line x1="729.9" y1="254.0" x2="441.5" y2="494.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="481.7" y="366.0" width="208.0" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="585.7" y="377.0" font-size="10.5" fill="#333" text-anchor="middle">POST /internal/sandbox/files/upload</text>
+<line x1="790.0" y1="254.0" x2="693.8" y2="494.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="677.1" y="366.0" width="129.6" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="741.9" y="377.0" font-size="10.5" fill="#333" text-anchor="middle">POST /internal/images</text>
+<line x1="850.0" y1="254.0" x2="946.2" y2="494.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="813.7" y="366.0" width="168.8" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="898.1" y="377.0" font-size="10.5" fill="#333" text-anchor="middle">GET·POST /internal/cron-jobs</text>
+<line x1="248.9" y1="468.0" x2="322.4" y2="694.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="204.1" y="573.0" width="163.2" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="285.7" y="584.0" font-size="10.5" fill="#333" text-anchor="middle">IncomingMessage channel=web</text>
+<line x1="490.0" y1="748.0" x2="510.0" y2="748.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="440.8" y="740.0" width="118.4" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="500.0" y="751.0" font-size="10.5" fill="#333" text-anchor="middle">to_agentrun_request</text>
+<line x1="810.0" y1="748.0" x2="830.0" y2="748.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="802.8" y="740.0" width="34.4" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="820.0" y="751.0" font-size="10.5" fill="#333" text-anchor="middle">配置聚合</text>
+<line x1="810.0" y1="748.0" x2="1150.0" y2="748.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="957.2" y="740.0" width="45.6" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="980.0" y="751.0" font-size="10.5" fill="#333" text-anchor="middle">启动流式执行</text>
+<line x1="1282.0" y1="802.0" x2="1012.0" y2="1614.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="1087.8" y="1200.0" width="118.4" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="1147.0" y="1211.0" font-size="10.5" fill="#333" text-anchor="middle">流式 chat completions</text>
+<line x1="1169.1" y1="802.0" x2="1110.9" y2="826.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="1075.2" y="806.0" width="129.6" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="1140.0" y="817.0" font-size="10.5" fill="#333" text-anchor="middle">tool_executor.execute</text>
+<line x1="1130.0" y1="880.0" x2="1150.0" y2="880.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="1122.8" y="872.0" width="34.4" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="1140.0" y="883.0" font-size="10.5" fill="#333" text-anchor="middle">按名分发</text>
+<line x1="830.0" y1="910.9" x2="490.0" y2="981.1" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="642.8" y="938.0" width="34.4" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="660.0" y="949.0" font-size="10.5" fill="#333" text-anchor="middle">按名分发</text>
+<line x1="849.1" y1="934.0" x2="790.9" y2="958.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="802.8" y="938.0" width="34.4" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="820.0" y="949.0" font-size="10.5" fill="#333" text-anchor="middle">按名分发</text>
+<line x1="980.0" y1="934.0" x2="980.0" y2="958.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="957.2" y="938.0" width="45.6" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="980.0" y="949.0" font-size="10.5" fill="#333" text-anchor="middle">MCP 优先</text>
+<line x1="1150.0" y1="768.6" x2="490.0" y2="859.4" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="808.4" y="806.0" width="23.2" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="820.0" y="817.0" font-size="10.5" fill="#333" text-anchor="middle">增量</text>
+<line x1="490.0" y1="880.0" x2="510.0" y2="880.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="480.0" y="872.0" width="40.0" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="500.0" y="883.0" font-size="10.5" fill="#333" text-anchor="middle">Event</text>
+<line x1="370.0" y1="384.0" x2="1083.0" y2="218.5" stroke-width="1.4" stroke-dasharray="6,5" marker-end="url(#ahd)" stroke="#888"/>
+<rect x="642.1" y="293.2" width="168.8" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="726.5" y="304.2" font-size="10.5" fill="#333" text-anchor="middle">SSE：data: 事件 JSON（camelCase）</text>
+<line x1="1083.0" y1="179.0" x2="557.0" y2="179.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="783.2" y="171.0" width="73.6" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="820.0" y="182.0" font-size="10.5" fill="#333" text-anchor="middle">更新 Timeline</text>
+<line x1="337.1" y1="1066.0" x2="307.3" y2="1614.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="254.6" y="1332.0" width="135.2" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="322.2" y="1343.0" font-size="10.5" fill="#333" text-anchor="middle">AsyncSandbox 文件/命令 API</text>
+<line x1="412.9" y1="598.0" x2="946.1" y2="1416.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="631.5" y="999.0" width="96.0" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="679.5" y="1010.0" font-size="10.5" fill="#333" text-anchor="middle">workspace() 懒创建</text>
+<line x1="830.0" y1="1513.7" x2="464.0" y2="1625.2" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="565.4" y="1561.5" width="163.2" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="647.0" y="1572.5" font-size="10.5" fill="#333" text-anchor="middle">AsyncSandbox.create/connect</text>
+<line x1="980.0" y1="1416.0" x2="980.0" y2="1264.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="934.8" y="1332.0" width="90.4" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="980.0" y="1343.0" font-size="10.5" fill="#333" text-anchor="middle">mount_for_user</text>
+<line x1="903.9" y1="1264.0" x2="391.8" y2="1614.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="574.7" y="1431.0" width="146.4" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="647.9" y="1442.0" font-size="10.5" fill="#333" text-anchor="middle">AsyncVolume（挂载/overview）</text>
+<line x1="1380.0" y1="468.0" x2="1008.0" y2="1160.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="1137.6" y="806.0" width="112.8" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="1194.0" y="817.0" font-size="10.5" fill="#333" text-anchor="middle">read_user_overview</text>
+<line x1="1150.0" y1="1212.0" x2="1130.0" y2="1212.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="1097.6" y="1204.0" width="84.8" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="1140.0" y="1215.0" font-size="10.5" fill="#333" text-anchor="middle">读 overview.md</text>
+<line x1="1009.0" y1="1066.0" x2="1303.7" y2="1614.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="1136.4" y="1332.0" width="40.0" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="1156.4" y="1343.0" font-size="10.5" fill="#333" text-anchor="middle">连接与调用</text>
+<line x1="671.8" y1="598.0" x2="649.3" y2="1614.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="615.4" y="1098.0" width="90.4" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="660.6" y="1109.0" font-size="10.5" fill="#333" text-anchor="middle">预签名 URL（直传/预览）</text>
+<line x1="513.8" y1="468.0" x2="352.2" y2="1160.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="396.2" y="806.0" width="73.6" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="433.0" y="817.0" font-size="10.5" fill="#333" text-anchor="middle">get_records</text>
+<line x1="534.8" y1="468.0" x2="651.2" y2="1160.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="545.0" y="806.0" width="96.0" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="593.0" y="817.0" font-size="10.5" fill="#333" text-anchor="middle">session_summary</text>
+<line x1="622.8" y1="802.0" x2="375.9" y2="1160.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="484.9" y="973.0" width="28.8" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="499.3" y="984.0" font-size="10.5" fill="#333" text-anchor="middle">写消息</text>
+<line x1="660.0" y1="802.0" x2="660.0" y2="1160.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="595.2" y="973.0" width="129.6" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="660.0" y="984.0" font-size="10.5" fill="#333" text-anchor="middle">start / finish / fail</text>
+<line x1="950.8" y1="802.0" x2="688.1" y2="1288.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="802.3" y="1037.0" width="34.4" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="819.5" y="1048.0" font-size="10.5" fill="#333" text-anchor="middle">模型定义</text>
+<line x1="921.6" y1="802.0" x2="396.2" y2="1288.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="613.7" y="1037.0" width="90.4" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="658.9" y="1048.0" font-size="10.5" fill="#333" text-anchor="middle">密钥 · 人格 · 默认模型</text>
+<line x1="932.0" y1="802.0" x2="386.2" y2="1416.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="622.3" y="1101.0" width="73.6" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="659.1" y="1112.0" font-size="10.5" fill="#333" text-anchor="middle">图片 → 短期 URL</text>
+<line x1="956.0" y1="802.0" x2="683.1" y2="1416.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="777.2" y="1101.0" width="84.8" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="819.6" y="1112.0" font-size="10.5" fill="#333" text-anchor="middle">uploads/ 文件校验</text>
+<line x1="1017.2" y1="802.0" x2="1264.1" y2="1160.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="1109.5" y="973.0" width="62.4" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="1140.7" y="984.0" font-size="10.5" fill="#333" text-anchor="middle">Skills 摘要</text>
+<line x1="980.0" y1="802.0" x2="980.0" y2="958.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="951.6" y="872.0" width="56.8" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="980.0" y="883.0" font-size="10.5" fill="#333" text-anchor="middle">MCP 工具定义</text>
+<line x1="1070.4" y1="468.0" x2="383.6" y2="1288.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="656.6" y="870.0" width="140.8" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="727.0" y="881.0" font-size="10.5" fill="#333" text-anchor="middle">providers.list_statuses</text>
+<line x1="793.0" y1="468.0" x2="367.0" y2="1288.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="501.2" y="870.0" width="157.6" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="580.0" y="881.0" font-size="10.5" fill="#333" text-anchor="middle">settings / providers / mcp</text>
+<line x1="693.1" y1="598.0" x2="959.9" y2="1288.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="814.9" y="935.0" width="23.2" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="826.5" y="946.0" font-size="10.5" fill="#333" text-anchor="middle">落库</text>
+<line x1="490.0" y1="1252.0" x2="1150.0" y2="1428.0" stroke-width="1.4" stroke-dasharray="6,5" marker-end="url(#ahd)" stroke="#888"/>
+<rect x="777.6" y="1332.0" width="84.8" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="820.0" y="1343.0" font-size="10.5" fill="#333" text-anchor="middle">chat_messages</text>
+<line x1="790.0" y1="1264.0" x2="1170.0" y2="1416.0" stroke-width="1.4" stroke-dasharray="6,5" marker-end="url(#ahd)" stroke="#888"/>
+<rect x="946.0" y="1332.0" width="68.0" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="980.0" y="1343.0" font-size="10.5" fill="#333" text-anchor="middle">usage_runs</text>
+<line x1="1045.0" y1="1264.0" x2="1235.0" y2="1416.0" stroke-width="1.4" stroke-dasharray="6,5" marker-end="url(#ahd)" stroke="#888"/>
+<rect x="1100.4" y="1332.0" width="79.2" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="1140.0" y="1343.0" font-size="10.5" fill="#333" text-anchor="middle">user_volumes</text>
+<line x1="1130.0" y1="1468.0" x2="1150.0" y2="1468.0" stroke-width="1.4" stroke-dasharray="6,5" marker-end="url(#ahd)" stroke="#888"/>
+<rect x="1094.8" y="1460.0" width="90.4" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="1140.0" y="1471.0" font-size="10.5" fill="#333" text-anchor="middle">user_sandboxes</text>
+<line x1="490.0" y1="1360.0" x2="1150.0" y2="1448.0" stroke-width="1.4" stroke-dasharray="6,5" marker-end="url(#ahd)" stroke="#888"/>
+<rect x="665.6" y="1396.0" width="308.8" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="820.0" y="1407.0" font-size="10.5" fill="#333" text-anchor="middle">users · user_agents · user_providers · mcp · bindings</text>
+<line x1="1300.0" y1="1392.0" x2="1300.0" y2="1416.0" stroke-width="1.4" stroke-dasharray="6,5" marker-end="url(#ahd)" stroke="#888"/>
+<rect x="1268.8" y="1396.0" width="62.4" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="1300.0" y="1407.0" font-size="10.5" fill="#333" text-anchor="middle">cron_jobs</text>
+<line x1="1110.0" y1="1392.0" x2="1170.0" y2="1416.0" stroke-width="1.4" stroke-dasharray="6,5" marker-end="url(#ahd)" stroke="#888"/>
+<rect x="1103.2" y="1396.0" width="73.6" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="1140.0" y="1407.0" font-size="10.5" fill="#333" text-anchor="middle">chat_images</text>
+<line x1="988.8" y1="598.0" x2="1278.2" y2="1288.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="1088.3" y="935.0" width="90.4" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="1133.5" y="946.0" font-size="10.5" fill="#333" text-anchor="middle">store / toggle</text>
+<line x1="1300.0" y1="1288.0" x2="1300.0" y2="1066.0" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="1232.4" y="1169.0" width="135.2" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="1300.0" y="1180.0" font-size="10.5" fill="#333" text-anchor="middle">scheduler 触发（croniter）</text>
+<line x1="1150.0" y1="970.8" x2="490.0" y2="789.3" stroke-width="1.4" marker-end="url(#ah)" stroke="#555"/>
+<rect x="744.0" y="872.0" width="152.0" height="16" rx="3" fill="rgba(255,255,255,0.92)" stroke="#ccc" stroke-width="0.6"/>
+<text x="820.0" y="883.0" font-size="10.5" fill="#333" text-anchor="middle">gateway.run（channel=cron）</text>
+<rect x="217" y="104" width="340" height="150" rx="10" fill="#E3F2FD" stroke="#1565C0" stroke-width="1.6"/>
+<text x="387" y="134" font-size="14" font-weight="bold" fill="#0D2B52" text-anchor="middle">浏览器页面</text>
+<text x="387" y="162" font-size="11" fill="#444" text-anchor="middle">chat-page（Timeline 状态）</text>
+<text x="387" y="182" font-size="11" fill="#444" text-anchor="middle">sandbox-panel · 会话列表</text>
+<text x="387" y="202" font-size="11" fill="#444" text-anchor="middle">settings-dialog</text>
+<rect x="585" y="104" width="470" height="150" rx="10" fill="#E3F2FD" stroke="#1565C0" stroke-width="1.6"/>
+<text x="820" y="134" font-size="14" font-weight="bold" fill="#0D2B52" text-anchor="middle">Next.js BFF（服务端代理，注入可信 userId）</text>
+<text x="820" y="162" font-size="11" fill="#444" text-anchor="middle">/api/chat/stream · /api/conversations</text>
+<text x="820" y="182" font-size="11" fill="#444" text-anchor="middle">/api/available-models · /api/settings · /api/skills</text>
+<text x="820" y="202" font-size="11" fill="#444" text-anchor="middle">/api/images/* · /api/mcp-servers · /api/cron-jobs</text>
+<text x="820" y="222" font-size="11" fill="#444" text-anchor="middle">/api/agent-runs/[id] · /api/sandbox/files/*</text>
+<rect x="1083" y="104" width="340" height="150" rx="10" fill="#E3F2FD" stroke="#1565C0" stroke-width="1.6"/>
+<text x="1253" y="134" font-size="14" font-weight="bold" fill="#0D2B52" text-anchor="middle">SSE 解析 lib/chat/stream.ts</text>
+<text x="1253" y="162" font-size="11" fill="#444" text-anchor="middle">applyStreamEvent</text>
+<text x="1253" y="182" font-size="11" fill="#444" text-anchor="middle">→ Timeline 增量更新</text>
+<rect x="94" y="364" width="276" height="104" rx="10" fill="#FFF3E0" stroke="#EF6C00" stroke-width="1.6"/>
+<text x="232" y="394" font-size="14" font-weight="bold" fill="#5C2E00" text-anchor="middle">webadapter.Adapter</text>
+<text x="232" y="422" font-size="11" fill="#444" text-anchor="middle">POST /internal/gateway/messages:stream</text>
+<text x="232" y="442" font-size="11" fill="#444" text-anchor="middle">GET·POST /internal/gateway/runs/[id]·cancel</text>
+<rect x="388" y="364" width="276" height="104" rx="10" fill="#FFF3E0" stroke="#EF6C00" stroke-width="1.6"/>
+<text x="526" y="394" font-size="14" font-weight="bold" fill="#5C2E00" text-anchor="middle">conversation</text>
+<text x="526" y="422" font-size="11" fill="#444" text-anchor="middle">GET /internal/conversations</text>
+<text x="526" y="442" font-size="11" fill="#444" text-anchor="middle">[/session_id]</text>
+<rect x="682" y="364" width="276" height="104" rx="10" fill="#FFF3E0" stroke="#EF6C00" stroke-width="1.6"/>
+<text x="820" y="394" font-size="14" font-weight="bold" fill="#5C2E00" text-anchor="middle">userconfig</text>
+<text x="820" y="422" font-size="11" fill="#444" text-anchor="middle">GET·PUT /internal/user-settings</text>
+<text x="820" y="442" font-size="11" fill="#444" text-anchor="middle">/internal/mcp-servers*</text>
+<rect x="976" y="364" width="276" height="104" rx="10" fill="#FFF3E0" stroke="#EF6C00" stroke-width="1.6"/>
+<text x="1114" y="394" font-size="14" font-weight="bold" fill="#5C2E00" text-anchor="middle">models</text>
+<text x="1114" y="422" font-size="11" fill="#444" text-anchor="middle">GET /internal/models</text>
+<text x="1114" y="442" font-size="11" fill="#444" text-anchor="middle">GET /internal/available-models</text>
+<rect x="1270" y="364" width="276" height="104" rx="10" fill="#FFF3E0" stroke="#EF6C00" stroke-width="1.6"/>
+<text x="1408" y="394" font-size="14" font-weight="bold" fill="#5C2E00" text-anchor="middle">skills</text>
+<text x="1408" y="422" font-size="11" fill="#444" text-anchor="middle">GET /internal/skills</text>
+<rect x="241" y="494" width="276" height="104" rx="10" fill="#FFF3E0" stroke="#EF6C00" stroke-width="1.6"/>
+<text x="379" y="524" font-size="14" font-weight="bold" fill="#5C2E00" text-anchor="middle">sandbox</text>
+<text x="379" y="552" font-size="11" fill="#444" text-anchor="middle">/internal/sandbox/files*</text>
+<text x="379" y="572" font-size="11" fill="#444" text-anchor="middle">列表 · 预览 · 上传 · 下载</text>
+<rect x="535" y="494" width="276" height="104" rx="10" fill="#FFF3E0" stroke="#EF6C00" stroke-width="1.6"/>
+<text x="673" y="524" font-size="14" font-weight="bold" fill="#5C2E00" text-anchor="middle">images</text>
+<text x="673" y="552" font-size="11" fill="#444" text-anchor="middle">/internal/images*</text>
+<text x="673" y="572" font-size="11" fill="#444" text-anchor="middle">创建 · 完成 · 重定向</text>
+<rect x="829" y="494" width="276" height="104" rx="10" fill="#FFF3E0" stroke="#EF6C00" stroke-width="1.6"/>
+<text x="967" y="524" font-size="14" font-weight="bold" fill="#5C2E00" text-anchor="middle">cronjob</text>
+<text x="967" y="552" font-size="11" fill="#444" text-anchor="middle">/internal/cron-jobs*</text>
+<text x="967" y="572" font-size="11" fill="#444" text-anchor="middle">增删改查 · 启停</text>
+<rect x="1123" y="494" width="276" height="104" rx="10" fill="#FFF3E0" stroke="#EF6C00" stroke-width="1.6"/>
+<text x="1261" y="524" font-size="14" font-weight="bold" fill="#5C2E00" text-anchor="middle">http_utils（横切）</text>
+<text x="1261" y="552" font-size="11" fill="#444" text-anchor="middle">EDITHError → 统一</text>
+<text x="1261" y="572" font-size="11" fill="#444" text-anchor="middle">{type,message} 响应</text>
+<rect x="190" y="694" width="300" height="108" rx="10" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.6"/>
+<text x="340" y="724" font-size="14" font-weight="bold" fill="#143B18" text-anchor="middle">gateway.Service</text>
+<text x="340" y="752" font-size="11" fill="#444" text-anchor="middle">渠道身份翻译</text>
+<text x="340" y="772" font-size="11" fill="#444" text-anchor="middle">web/cron 可信直通</text>
+<rect x="510" y="694" width="300" height="108" rx="10" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.6"/>
+<text x="660" y="724" font-size="14" font-weight="bold" fill="#143B18" text-anchor="middle">agentrun.Service</text>
+<text x="660" y="752" font-size="11" fill="#444" text-anchor="middle">run/status/cancel</text>
+<text x="660" y="772" font-size="11" fill="#444" text-anchor="middle">session_lanes · user_stops · active</text>
+<rect x="830" y="694" width="300" height="108" rx="10" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.6"/>
+<text x="980" y="724" font-size="14" font-weight="bold" fill="#143B18" text-anchor="middle">configuration.RunConfigurations</text>
+<text x="980" y="752" font-size="11" fill="#444" text-anchor="middle">模型 · 密钥 · 人格 · Skills</text>
+<text x="980" y="772" font-size="11" fill="#444" text-anchor="middle">图片 · 上传文件 · MCP 聚合</text>
+<rect x="1150" y="694" width="300" height="108" rx="10" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.6"/>
+<text x="1300" y="724" font-size="14" font-weight="bold" fill="#143B18" text-anchor="middle">execution.chat</text>
+<text x="1300" y="752" font-size="11" fill="#444" text-anchor="middle">AsyncOpenAI 流式循环</text>
+<text x="1300" y="772" font-size="11" fill="#444" text-anchor="middle">工具调用循环（≤8 轮）</text>
+<rect x="190" y="826" width="300" height="108" rx="10" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.6"/>
+<text x="340" y="856" font-size="14" font-weight="bold" fill="#143B18" text-anchor="middle">agentstream.StreamDecoder</text>
+<text x="340" y="884" font-size="11" fill="#444" text-anchor="middle">内容增量/工具调用</text>
+<text x="340" y="904" font-size="11" fill="#444" text-anchor="middle">→ 中性 Event</text>
+<rect x="510" y="826" width="300" height="108" rx="10" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.6"/>
+<text x="660" y="856" font-size="14" font-weight="bold" fill="#143B18" text-anchor="middle">agentstream.Event</text>
+<text x="660" y="884" font-size="11" fill="#444" text-anchor="middle">assistantId · blockId</text>
+<text x="660" y="904" font-size="11" fill="#444" text-anchor="middle">toolCallId · sessionUsage</text>
+<rect x="830" y="826" width="300" height="108" rx="10" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.6"/>
+<text x="980" y="856" font-size="14" font-weight="bold" fill="#143B18" text-anchor="middle">tools.ToolRegistry</text>
+<text x="980" y="884" font-size="11" fill="#444" text-anchor="middle">按 function.name 分发执行</text>
+<rect x="1150" y="826" width="300" height="108" rx="10" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.6"/>
+<text x="1300" y="856" font-size="14" font-weight="bold" fill="#143B18" text-anchor="middle">systemtools</text>
+<text x="1300" y="884" font-size="11" fill="#444" text-anchor="middle">SystemToolSet</text>
+<rect x="190" y="958" width="300" height="108" rx="10" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.6"/>
+<text x="340" y="988" font-size="14" font-weight="bold" fill="#143B18" text-anchor="middle">sandbox.SandboxToolSet</text>
+<text x="340" y="1016" font-size="11" fill="#444" text-anchor="middle">10 个文件/进程工具</text>
+<rect x="510" y="958" width="300" height="108" rx="10" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.6"/>
+<text x="660" y="988" font-size="14" font-weight="bold" fill="#143B18" text-anchor="middle">cronjob 工具集</text>
+<text x="660" y="1016" font-size="11" fill="#444" text-anchor="middle">定时任务管理工具</text>
+<rect x="830" y="958" width="300" height="108" rx="10" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.6"/>
+<text x="980" y="988" font-size="14" font-weight="bold" fill="#143B18" text-anchor="middle">userconfig.MCPToolContext</text>
+<text x="980" y="1016" font-size="11" fill="#444" text-anchor="middle">动态 MCP 工具</text>
+<text x="980" y="1036" font-size="11" fill="#444" text-anchor="middle">（每次运行打开）</text>
+<rect x="1150" y="958" width="300" height="108" rx="10" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.6"/>
+<text x="1300" y="988" font-size="14" font-weight="bold" fill="#143B18" text-anchor="middle">cronadapter.Adapter</text>
+<text x="1300" y="1016" font-size="11" fill="#444" text-anchor="middle">channel=cron</text>
+<rect x="190" y="1160" width="300" height="104" rx="10" fill="#F3E5F5" stroke="#7B1FA2" stroke-width="1.6"/>
+<text x="340" y="1190" font-size="14" font-weight="bold" fill="#3A0B4E" text-anchor="middle">session.store</text>
+<text x="340" y="1218" font-size="11" fill="#444" text-anchor="middle">chat_messages</text>
+<rect x="510" y="1160" width="300" height="104" rx="10" fill="#F3E5F5" stroke="#7B1FA2" stroke-width="1.6"/>
+<text x="660" y="1190" font-size="14" font-weight="bold" fill="#3A0B4E" text-anchor="middle">usage</text>
+<text x="660" y="1218" font-size="11" fill="#444" text-anchor="middle">recorder（写）· reader（读）</text>
+<text x="660" y="1238" font-size="11" fill="#444" text-anchor="middle">usage_runs</text>
+<rect x="830" y="1160" width="300" height="104" rx="10" fill="#F3E5F5" stroke="#7B1FA2" stroke-width="1.6"/>
+<text x="980" y="1190" font-size="14" font-weight="bold" fill="#3A0B4E" text-anchor="middle">volume.Service</text>
+<text x="980" y="1218" font-size="11" fill="#444" text-anchor="middle">用户 E2B Volume 绑定</text>
+<text x="980" y="1238" font-size="11" fill="#444" text-anchor="middle">懒创建 · 403 降级</text>
+<rect x="1150" y="1160" width="300" height="104" rx="10" fill="#F3E5F5" stroke="#7B1FA2" stroke-width="1.6"/>
+<text x="1300" y="1190" font-size="14" font-weight="bold" fill="#3A0B4E" text-anchor="middle">skills.Catalog</text>
+<text x="1300" y="1218" font-size="11" fill="#444" text-anchor="middle">公共 Skills 摘要</text>
+<text x="1300" y="1238" font-size="11" fill="#444" text-anchor="middle">用户 overview</text>
+<rect x="190" y="1288" width="300" height="104" rx="10" fill="#F3E5F5" stroke="#7B1FA2" stroke-width="1.6"/>
+<text x="340" y="1318" font-size="14" font-weight="bold" fill="#3A0B4E" text-anchor="middle">userconfig 能力</text>
+<text x="340" y="1346" font-size="11" fill="#444" text-anchor="middle">settings · providers</text>
+<text x="340" y="1366" font-size="11" fill="#444" text-anchor="middle">bindings · mcp</text>
+<rect x="510" y="1288" width="300" height="104" rx="10" fill="#F3E5F5" stroke="#7B1FA2" stroke-width="1.6"/>
+<text x="660" y="1318" font-size="14" font-weight="bold" fill="#3A0B4E" text-anchor="middle">models.Catalog</text>
+<text x="660" y="1346" font-size="11" fill="#444" text-anchor="middle">模型目录定义（base_url）</text>
+<rect x="830" y="1288" width="300" height="104" rx="10" fill="#F3E5F5" stroke="#7B1FA2" stroke-width="1.6"/>
+<text x="980" y="1318" font-size="14" font-weight="bold" fill="#3A0B4E" text-anchor="middle">images.service · store</text>
+<text x="980" y="1346" font-size="11" fill="#444" text-anchor="middle">chat_images + COS 签名</text>
+<rect x="1150" y="1288" width="300" height="104" rx="10" fill="#F3E5F5" stroke="#7B1FA2" stroke-width="1.6"/>
+<text x="1300" y="1318" font-size="14" font-weight="bold" fill="#3A0B4E" text-anchor="middle">cronjob.store + scheduler</text>
+<text x="1300" y="1346" font-size="11" fill="#444" text-anchor="middle">croniter 调度</text>
+<rect x="190" y="1416" width="300" height="104" rx="10" fill="#F3E5F5" stroke="#7B1FA2" stroke-width="1.6"/>
+<text x="340" y="1446" font-size="14" font-weight="bold" fill="#3A0B4E" text-anchor="middle">images.AgentInput</text>
+<text x="340" y="1474" font-size="11" fill="#444" text-anchor="middle">图片 ID → 短期访问 URL</text>
+<rect x="510" y="1416" width="300" height="104" rx="10" fill="#F3E5F5" stroke="#7B1FA2" stroke-width="1.6"/>
+<text x="660" y="1446" font-size="14" font-weight="bold" fill="#3A0B4E" text-anchor="middle">sandbox.AgentInput</text>
+<text x="660" y="1474" font-size="11" fill="#444" text-anchor="middle">校验 uploads/ 上传文件</text>
+<rect x="830" y="1416" width="300" height="104" rx="10" fill="#F3E5F5" stroke="#7B1FA2" stroke-width="1.6"/>
+<text x="980" y="1446" font-size="14" font-weight="bold" fill="#3A0B4E" text-anchor="middle">sandbox.Service</text>
+<text x="980" y="1474" font-size="11" fill="#444" text-anchor="middle">user_sandboxes 映射</text>
+<text x="980" y="1494" font-size="11" fill="#444" text-anchor="middle">懒创建 Sandbox</text>
+<ellipse cx="1300" cy="1426" rx="150" ry="10" fill="#F3E5F5" stroke="#7B1FA2" stroke-width="1.6"/>
+<rect x="1150" y="1426" width="300" height="94" fill="#F3E5F5" stroke="#7B1FA2" stroke-width="1.6"/>
+<ellipse cx="1300" cy="1510" rx="150" ry="10" fill="#F3E5F5" stroke="#7B1FA2" stroke-width="1.6"/>
+<line x1="1150" y1="1426" x2="1150" y2="1510" stroke="#7B1FA2" stroke-width="1.6"/>
+<line x1="1450" y1="1426" x2="1450" y2="1510" stroke="#7B1FA2" stroke-width="1.6"/>
+<text x="1300" y="1446" font-size="14" font-weight="bold" fill="#3A0B4E" text-anchor="middle">SQLite 单连接</text>
+<text x="1300" y="1474" font-size="11" fill="#444" text-anchor="middle">edith-v2.db</text>
+<text x="1300" y="1494" font-size="11" fill="#444" text-anchor="middle">DELETE 日志模式</text>
+<rect x="144" y="1614" width="320" height="120" rx="10" fill="#FFEBEE" stroke="#C62828" stroke-width="1.6"/>
+<text x="304" y="1644" font-size="14" font-weight="bold" fill="#5C1010" text-anchor="middle">E2B Cloud</text>
+<text x="304" y="1672" font-size="11" fill="#444" text-anchor="middle">Sandbox：uploads / work / artifacts / skills</text>
+<text x="304" y="1692" font-size="11" fill="#444" text-anchor="middle">Volume：用户自定义 Skills</text>
+<rect x="488" y="1614" width="320" height="120" rx="10" fill="#FFEBEE" stroke="#C62828" stroke-width="1.6"/>
+<text x="648" y="1644" font-size="14" font-weight="bold" fill="#5C1010" text-anchor="middle">腾讯云 COS</text>
+<text x="648" y="1672" font-size="11" fill="#444" text-anchor="middle">图片对象存储</text>
+<rect x="832" y="1614" width="320" height="120" rx="10" fill="#FFEBEE" stroke="#C62828" stroke-width="1.6"/>
+<text x="992" y="1644" font-size="14" font-weight="bold" fill="#5C1010" text-anchor="middle">LLM Provider（OpenAI 兼容）</text>
+<text x="992" y="1672" font-size="11" fill="#444" text-anchor="middle">流式接口，密钥来自用户配置</text>
+<rect x="1176" y="1614" width="320" height="120" rx="10" fill="#FFEBEE" stroke="#C62828" stroke-width="1.6"/>
+<text x="1336" y="1644" font-size="14" font-weight="bold" fill="#5C1010" text-anchor="middle">用户 MCP 服务器</text>
+<text x="1336" y="1672" font-size="11" fill="#444" text-anchor="middle">sse / streamable 传输</text>
+<text x="40" y="1792" font-size="12" fill="#666">关键配置：EDITH_RUNTIME_URL（前端 BFF → 后端）· EDITH_ADDR / EDITH_DB_PATH（后端）· EDITH_E2B_TEMPLATE / E2B_API_KEY · EDITH_COS_* · Clerk 凭证（前端）</text>
+<text x="40" y="1812" font-size="12" fill="#666">链路：聊天（SSE 事件流）· Agent 工具（ToolRegistry 分发）· 文件上传（E2B Sandbox）· 历史/用量（SQLite）· 图片（COS）· 定时任务（cronadapter → gateway）</text>
+</svg>
