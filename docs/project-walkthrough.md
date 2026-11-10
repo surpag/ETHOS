@@ -2035,3 +2035,11 @@ docker compose --profile tunnel down        # 永远不加 -v
 - 一个工作区只能有一个未归档会话（DB 唯一索引）
 - 普通对话（`workspace_id IS NULL`）可以自由多开
 
+sqlite3 -header -column "edith-v2.db" "SELECT rowid, step, tool, progress
+   FROM run_checkpoints
+   WHERE user_id='user_3Hm1pmVlyWo1rW9BYe0kY6ja3DM' 
+   ORDER BY step;"
+
+
+
+sqlite3 -header -column "edith-v2.db" "SELECT * FROM trace_steps WHERE type='resume';"

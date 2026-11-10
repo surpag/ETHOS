@@ -118,6 +118,8 @@ edith-architecture-v2.html
 # 框架/数据库学习笔记，属个人材料
 /docs/AIKNOW/
 /docs/learn/
+# 面试训练计划（与 /docs/interview-notes.md 同类）
+/docs/agent-gap-training-plan.md
 
 # ---------- 编辑器工作区配置 ----------
 /*.code-workspace
