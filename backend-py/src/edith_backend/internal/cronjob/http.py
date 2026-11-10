@@ -32,6 +32,10 @@ def _job_response(job: Job) -> JobResponse:
         next_run_at=job.next_run_at.isoformat() if job.next_run_at else None,
         running=job.running,
         created_at=job.created_at.isoformat() if job.created_at else "",
+        last_run_at=job.last_run_at.isoformat() if job.last_run_at else None,
+        last_error=job.last_error,
+        last_error_at=job.last_error_at.isoformat() if job.last_error_at else None,
+        consecutive_failures=job.consecutive_failures,
     )
 
 

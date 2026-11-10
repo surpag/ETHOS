@@ -52,11 +52,21 @@ class Scheduler:
             asyncio.create_task(self._run_claimed(claimed))
 
     async def _run_claimed(self, job: Job) -> None:
+        error: str | None = None
         try:
             await self._runner.run_job(job)
         except Exception as exc:  # noqa: BLE001
-            logger.warning("run cron job %s: %s", job.id, exc)
+            # 失败不是「记一行日志就完事」：定时任务没有人在旁边看着，
+            # 日志只有运维能看到。把错误文本带进 finish_run，任务行上才有
+            # 地方把它显示给用户。
+            error = f"{type(exc).__name__}: {exc}"
+            logger.warning(
+                "run cron job %s failed consecutive=%s: %s",
+                job.id,
+                job.consecutive_failures + 1,
+                exc,
+            )
         try:
-            await self._store.finish_run(job.id, datetime.now(UTC))
+            await self._store.finish_run(job.id, datetime.now(UTC), error)
         except Exception as exc:  # noqa: BLE001
             logger.warning("finish cron job %s: %s", job.id, exc)

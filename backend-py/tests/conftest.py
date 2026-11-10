@@ -22,14 +22,22 @@ def client(tmp_path_factory) -> TestClient:
     db_path = tmp_path_factory.mktemp("data") / "edith-test.db"
     previous = os.environ.get("EDITH_DB_PATH")
     os.environ["EDITH_DB_PATH"] = str(db_path)
+    # 用户 Skill 本地根目录同样重定向：默认 `user-skills/` 是相对 CWD 的，
+    # 测试沿用会往仓库里写用户数据（且各用例互相干扰）。
+    previous_skills = os.environ.get("EDITH_USER_SKILLS_DIR")
+    os.environ["EDITH_USER_SKILLS_DIR"] = str(db_path.parent / "user-skills")
     try:
         with TestClient(app) as c:
             yield c
     finally:
-        if previous is None:
-            os.environ.pop("EDITH_DB_PATH", None)
-        else:
-            os.environ["EDITH_DB_PATH"] = previous
+        for name, value in (
+            ("EDITH_DB_PATH", previous),
+            ("EDITH_USER_SKILLS_DIR", previous_skills),
+        ):
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
 
 
 @pytest.fixture(autouse=True)

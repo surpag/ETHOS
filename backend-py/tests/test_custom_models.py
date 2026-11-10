@@ -44,7 +44,16 @@ def test_endpoint_url_public_https_is_normalized() -> None:
         "https://metadata.google.internal/v1",
     ],
 )
-def test_endpoint_url_rejects_private_and_metadata(url: str) -> None:
+def test_endpoint_url_rejects_private_and_metadata(url: str, monkeypatch) -> None:
+    """默认（开关关闭）时必须拒绝回环/私网/元数据端点。
+
+    显式清掉开关而不是依赖进程环境：app 启动时 `load_environment()` 会把
+    backend-py/.env 灌进 os.environ，而 pytest 是单进程——只要本次运行里
+    有更早的用例触发过 lifespan，这里就会读到 `..._ALLOW_LOCAL_MODEL_ENDPOINT=true`
+    并「不报错」。那样结果取决于文件名排序（本文件排在 test_cache_telemetry
+    之后就会红），是典型的顺序依赖，必须由用例自己声明前置条件。
+    """
+    monkeypatch.delenv("EDITH_ALLOW_LOCAL_MODEL_ENDPOINT", raising=False)
     with pytest.raises(EndpointRejected):
         normalize_endpoint_url(url)
 
@@ -65,6 +74,8 @@ def test_endpoint_url_rejects_malformed(url: str) -> None:
 
 
 def test_endpoint_url_allows_http_only_when_local_switch_on(monkeypatch) -> None:
+    # 前置条件显式声明（原因见上一条用例的 docstring）
+    monkeypatch.delenv("EDITH_ALLOW_LOCAL_MODEL_ENDPOINT", raising=False)
     with pytest.raises(EndpointRejected):
         normalize_endpoint_url("http://localhost:11434/v1")
     monkeypatch.setenv("EDITH_ALLOW_LOCAL_MODEL_ENDPOINT", "true")

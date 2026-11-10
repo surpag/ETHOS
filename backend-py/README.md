@@ -94,6 +94,21 @@ uv run edith-backend
 .venv\Scripts\python.exe -m pytest -q
 ```
 
+## 运维命令：Skill 显式迁移
+
+把存量**用户级** Skill 复制成**项目级**（`docs/skill-scope-design.md` 第九节）。默认 dry-run，源永不自动删：
+
+```powershell
+# 单条：只打印计划，一个文件都不写
+.venv\Scripts\python.exe -m edith_backend.internal.skills.migrate `
+  --user user_x --skill deploy-notes --to project:ws-abc
+
+# 批量：migration.yaml 里 migrations 列表，字段严格（多/少一个都拒绝执行）
+.venv\Scripts\python.exe -m edith_backend.internal.skills.migrate --file migration.yaml --apply
+```
+
+退出码：`0` 全部 migrated/skipped，`1` 有 failed（其余已迁），`2` schema 或预检查失败（**整批未执行**）。
+
 ## 开发进度
 
 - [x] 阶段 0：脚手架（FastAPI + /health）

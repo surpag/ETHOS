@@ -22,6 +22,15 @@ class Recorder:
         await self._store.finish(run, tokens)
         return await self._store.session_summary(run.user_id, run.session_id)
 
+    async def add_auxiliary(self, run: Run, tokens: Tokens) -> Summary:
+        """把收尾之后发生的附属调用（自动记忆抽取）计入本次运行。
+
+        返回刷新后的会话汇总——调用方据此推一条事件给前端，保证「实时看到的用量」
+        和「刷新后的用量」是同一个数（只用 DB 里的值，不在前端重算）。
+        """
+        await self._store.add_auxiliary(run.request_id, tokens)
+        return await self._store.session_summary(run.user_id, run.session_id)
+
     async def fail(self, request_id: str) -> None:
         """标记未完成运行失败；失败运行不计入会话用量。"""
         await self._store.fail(request_id)

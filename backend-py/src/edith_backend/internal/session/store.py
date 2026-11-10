@@ -40,8 +40,11 @@ class SessionStore:
         content: str,
         image_ids: list[str] | None = None,
         workspace_id: str | None = None,
-    ) -> None:
-        await self._insert(user_id, session_id, "user", content, "", image_ids or [], workspace_id)
+    ) -> int:
+        """落库用户消息，返回消息 id（约束抽取用它是为了能溯源到原话）。"""
+        return await self._insert(
+            user_id, session_id, "user", content, "", image_ids or [], workspace_id
+        )
 
     async def add_assistant_message(
         self,
@@ -52,18 +55,90 @@ class SessionStore:
         workspace_id: str | None = None,
         tool_calls: list[dict] | None = None,
         duration_ms: int | None = None,
+        completion_evidence: str | None = None,
+        end_reason: str | None = None,
+        request_id: str | None = None,
     ) -> None:
-        await self._insert(
-            user_id,
-            session_id,
-            "assistant",
-            content,
-            reasoning,
-            [],
-            workspace_id,
-            tool_calls,
-            duration_ms,
+        """写入（或覆盖）本次 run 的助手消息。
+
+        有 `request_id` 时按「一次 run 一条消息」upsert：运行中的进度写入会先
+        落下同一行，终态写入只补齐结论字段，不会产生第二条回复。
+        没有 `request_id`（旧调用方/测试）时退回纯插入，行为不变。
+        """
+        await self._upsert_assistant(
+            user_id=user_id,
+            session_id=session_id,
+            content=content,
+            reasoning=reasoning,
+            workspace_id=workspace_id,
+            tool_calls=tool_calls,
+            duration_ms=duration_ms,
+            completion_evidence=completion_evidence,
+            end_reason=end_reason,
+            request_id=request_id,
         )
+
+    async def _upsert_assistant(
+        self,
+        user_id: str,
+        session_id: str,
+        content: str,
+        reasoning: str = "",
+        workspace_id: str | None = None,
+        tool_calls: list[dict] | None = None,
+        duration_ms: int | None = None,
+        completion_evidence: str | None = None,
+        end_reason: str | None = None,
+        request_id: str | None = None,
+    ) -> None:
+        if request_id is None:
+            await self._insert(
+                user_id,
+                session_id,
+                "assistant",
+                content,
+                reasoning,
+                [],
+                workspace_id,
+                tool_calls,
+                duration_ms,
+                completion_evidence,
+                end_reason,
+                None,
+            )
+            return
+        if workspace_id:
+            await self._claim_workspace(user_id, session_id, workspace_id)
+        # 结论字段（耗时/证据/终止原因）用 COALESCE：进度写入传 NULL，不该把
+        # 已经写好的结论擦掉。内容字段直接覆盖，因为后者永远比前者完整。
+        await self._db.execute(
+            """
+            INSERT INTO chat_messages (user_id, session_id, role, content, reasoning, image_ids, workspace_id, tool_calls, duration_ms, completion_evidence, end_reason, request_id)
+            VALUES (?, ?, 'assistant', ?, ?, NULL, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, session_id, role, request_id) WHERE request_id IS NOT NULL
+            DO UPDATE SET
+                content = excluded.content,
+                reasoning = excluded.reasoning,
+                tool_calls = excluded.tool_calls,
+                workspace_id = COALESCE(chat_messages.workspace_id, excluded.workspace_id),
+                duration_ms = COALESCE(excluded.duration_ms, chat_messages.duration_ms),
+                completion_evidence = COALESCE(excluded.completion_evidence, chat_messages.completion_evidence),
+                end_reason = COALESCE(excluded.end_reason, chat_messages.end_reason)
+            """,
+            (
+                user_id,
+                session_id,
+                content,
+                reasoning or None,
+                workspace_id or None,
+                json.dumps(tool_calls, ensure_ascii=False) if tool_calls else None,
+                duration_ms,
+                completion_evidence,
+                end_reason,
+                request_id,
+            ),
+        )
+        await self._db.commit()
 
     async def _insert(
         self,
@@ -76,14 +151,17 @@ class SessionStore:
         workspace_id: str | None,
         tool_calls: list[dict] | None = None,
         duration_ms: int | None = None,
-    ) -> None:
+        completion_evidence: str | None = None,
+        end_reason: str | None = None,
+        request_id: str | None = None,
+    ) -> int:
         if workspace_id:
             # 先占住工作区再落消息：占不到就直接失败，不会留下一条「无主」消息。
             await self._claim_workspace(user_id, session_id, workspace_id)
-        await self._db.execute(
+        cursor = await self._db.execute(
             """
-            INSERT INTO chat_messages (user_id, session_id, role, content, reasoning, image_ids, workspace_id, tool_calls, duration_ms)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO chat_messages (user_id, session_id, role, content, reasoning, image_ids, workspace_id, tool_calls, duration_ms, completion_evidence, end_reason, request_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user_id,
@@ -95,9 +173,13 @@ class SessionStore:
                 workspace_id or None,
                 json.dumps(tool_calls, ensure_ascii=False) if tool_calls else None,
                 duration_ms,
+                completion_evidence,
+                end_reason,
+                request_id,
             ),
         )
         await self._db.commit()
+        return int(cursor.lastrowid or 0)
 
     async def _claim_workspace(
         self, user_id: str, session_id: str, workspace_id: str
@@ -199,7 +281,8 @@ class SessionStore:
         """返回完整消息记录（供 Timeline 投影）。"""
         cursor = await self._db.execute(
             """
-            SELECT id, role, content, reasoning, image_ids, tool_calls, created_at, duration_ms
+            SELECT id, role, content, reasoning, image_ids, tool_calls, created_at, duration_ms,
+                   completion_evidence, end_reason, request_id
             FROM chat_messages WHERE user_id = ? AND session_id = ? ORDER BY id
             """,
             (user_id, session_id),
@@ -220,6 +303,9 @@ class SessionStore:
                     tool_calls=tool_calls,
                     created_at=row["created_at"] or "",
                     duration_ms=row["duration_ms"],
+                    completion_evidence=row["completion_evidence"],
+                    end_reason=row["end_reason"],
+                    request_id=row["request_id"],
                 )
             )
         return records
@@ -445,6 +531,18 @@ class SessionStore:
         )
         await self._db.execute(
             "DELETE FROM run_checkpoints WHERE user_id = ? AND session_id = ?",
+            (user_id, session_id),
+        )
+        # 会话级约束跟着会话走；工作区级约束要留下（项目约定跨会话复用）。
+        # 漏掉这条删除，删过的会话会在约束表里留下永远无法被注入的孤儿行。
+        await self._db.execute(
+            "DELETE FROM constraints"
+            " WHERE user_id = ? AND scope = 'session' AND scope_id = ?",
+            (user_id, session_id),
+        )
+        # 计划快照与消息同生共死：会话没了，计划面板也不该再回填出内容
+        await self._db.execute(
+            "DELETE FROM run_plans WHERE user_id = ? AND session_id = ?",
             (user_id, session_id),
         )
         await self._db.commit()

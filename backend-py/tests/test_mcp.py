@@ -30,24 +30,28 @@ async def main() -> int:
 
     headers = {"Authorization": f"Bearer {TOKEN}"}
     if TRANSPORT == "streamable":
-        async with httpx.AsyncClient(headers=headers) as http:
-            async with streamable_http_client(URL, http_client=http) as (read, write):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    result = await session.list_tools()
-                    print(f"连接成功，共 {len(result.tools)} 个工具：")
-                    for tool in result.tools:
-                        print(f"  - {tool.name}: {tool.description}")
+        async with (
+            httpx.AsyncClient(headers=headers) as http,
+            streamable_http_client(URL, http_client=http) as (read, write),
+            ClientSession(read, write) as session,
+        ):
+            await session.initialize()
+            result = await session.list_tools()
+            print(f"连接成功，共 {len(result.tools)} 个工具：")
+            for tool in result.tools:
+                print(f"  - {tool.name}: {tool.description}")
     else:
         from mcp.client.sse import sse_client
 
-        async with sse_client(URL, headers=headers) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                result = await session.list_tools()
-                print(f"连接成功，共 {len(result.tools)} 个工具：")
-                for tool in result.tools:
-                    print(f"  - {tool.name}: {tool.description}")
+        async with (
+            sse_client(URL, headers=headers) as (read, write),
+            ClientSession(read, write) as session,
+        ):
+            await session.initialize()
+            result = await session.list_tools()
+            print(f"连接成功，共 {len(result.tools)} 个工具：")
+            for tool in result.tools:
+                print(f"  - {tool.name}: {tool.description}")
     return 0
 
 

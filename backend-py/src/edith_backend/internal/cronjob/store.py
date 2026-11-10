@@ -21,7 +21,10 @@ from .types import (
     JobNotFound,
 )
 
-_COLUMNS = "id, clerk_user_id, name, task_type, schedule, prompt, enabled, next_run_at, running, created_at"
+_COLUMNS = (
+    "id, clerk_user_id, name, task_type, schedule, prompt, enabled, next_run_at, "
+    "running, created_at, last_run_at, last_error, last_error_at, consecutive_failures"
+)
 
 
 def _dt(value: datetime | None) -> str | None:
@@ -44,6 +47,10 @@ def _row_to_job(row) -> Job:
         next_run_at=_parse_dt(row["next_run_at"]),
         running=bool(row["running"]),
         created_at=_parse_dt(row["created_at"]),
+        last_run_at=_parse_dt(row["last_run_at"]),
+        last_error=row["last_error"],
+        last_error_at=_parse_dt(row["last_error_at"]),
+        consecutive_failures=int(row["consecutive_failures"] or 0),
     )
 
 
@@ -169,7 +176,13 @@ class Store:
         await self._db.commit()
         return await self._job(job_id)
 
-    async def finish_run(self, job_id: str, now: datetime) -> None:
+    async def finish_run(self, job_id: str, now: datetime, error: str | None = None) -> None:
+        """收尾一次执行：无论成功失败都要推进 next_run_at，否则任务就此停摆。
+
+        `error` 非空表示这次失败（由调度器传入异常文本）。失败不改调度节奏——
+        一次 402 就停掉任务，等于让一个临时性的余额问题变成永久停服；但必须
+        记下「连续失败了几次」，让「偶尔抖一下」和「已经坏了三天」分开。
+        """
         job = await self._job(job_id)
         next_at = None
         if job.task_type == TASK_TYPE_RECURRING:
@@ -177,11 +190,22 @@ class Store:
                 self._settings, job.clerk_user_id,
                 JobInput(job.name, job.task_type, job.schedule, job.prompt), now,
             )
-        await self._db.execute(
-            "UPDATE cron_jobs SET running = 0, next_run_at = ?, "
-            "enabled = CASE WHEN task_type = ? THEN 0 ELSE enabled END WHERE id = ?",
-            (_dt(next_at), TASK_TYPE_ONCE, job_id),
-        )
+        if error:
+            await self._db.execute(
+                "UPDATE cron_jobs SET running = 0, next_run_at = ?, "
+                "enabled = CASE WHEN task_type = ? THEN 0 ELSE enabled END, "
+                "last_run_at = ?, last_error = ?, last_error_at = ?, "
+                "consecutive_failures = consecutive_failures + 1 WHERE id = ?",
+                (_dt(next_at), TASK_TYPE_ONCE, _dt(now), error[:1000], _dt(now), job_id),
+            )
+        else:
+            await self._db.execute(
+                "UPDATE cron_jobs SET running = 0, next_run_at = ?, "
+                "enabled = CASE WHEN task_type = ? THEN 0 ELSE enabled END, "
+                "last_run_at = ?, last_error = NULL, last_error_at = NULL, "
+                "consecutive_failures = 0 WHERE id = ?",
+                (_dt(next_at), TASK_TYPE_ONCE, _dt(now), job_id),
+            )
         await self._db.commit()
 
     async def initialize_next_runs(self, now: datetime) -> None:

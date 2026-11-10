@@ -20,7 +20,10 @@ from edith_backend.internal.agentrun.execution import (
     _estimate_tokens,
     _parse_result_retryable,
     _read_progress,
-    _trim_tool_results,
+)
+from edith_backend.internal.agentrun.tool_result import (
+    count_oversized_tool_results,
+    materialize_tool_result,
 )
 from edith_backend.internal.agentstream.types import Event
 from edith_backend.internal.session.schema import create_schema
@@ -172,24 +175,122 @@ def test_estimate_tokens_cjk_aware() -> None:
     assert _estimate_tokens([{"role": "tool", "content": None}]) == 0
 
 
-def test_trim_tool_results_keeps_recent() -> None:
-    messages = [{"role": "tool", "content": "x" * 5000} for _ in range(8)]
-    _trim_tool_results(messages, keep_recent=3, limit=100)
-    # 最近 3 条保留全文
-    assert len(messages[7]["content"]) == 5000
-    assert len(messages[6]["content"]) == 5000
-    assert len(messages[5]["content"]) == 5000
-    # 较早的被截断，且带标记
-    assert len(messages[0]["content"]) < 5000
-    assert "已截断" in messages[0]["content"]
-    # keep_recent=0 → 全部截断
-    all_trim = [{"role": "tool", "content": "z" * 5000} for _ in range(3)]
-    _trim_tool_results(all_trim, keep_recent=0, limit=10)
-    assert all("已截断" in m["content"] for m in all_trim)
-    # 非 tool 消息不动
-    mixed = [{"role": "user", "content": "y" * 5000}]
-    _trim_tool_results(mixed, keep_recent=0, limit=10)
-    assert len(mixed[0]["content"]) == 5000
+def test_materialize_keeps_head_and_tail(monkeypatch) -> None:
+    """超预算的纯文本结果：保头 + 保尾，中间省略，且给出续读指引。"""
+    monkeypatch.setenv("EDITH_TOOL_RESULT_MAX_CHARS", "1000")
+    raw = "HEAD" + "x" * 5000 + "TAIL"
+    m = materialize_tool_result("sandbox_run_command", raw)
+    assert m.truncated
+    assert m.strategy == "head_tail"
+    assert m.original_chars == len(raw)
+    assert m.content.startswith("HEAD")
+    assert m.content.endswith("TAIL")
+    # 定型结果有界：正文 + 标记，不会再把 5000 字符原样塞进历史
+    assert len(m.content) < len(raw)
+    # 标记必须告诉模型「怎么拿回被省略的部分」，否则它会当成文件就这么多
+    assert "工具结果已裁剪" in m.content
+    assert "offset" in m.content
+    assert "不要假设被省略的部分为空" in m.content
+
+    # 未超预算：原样返回，不填充、不加标记
+    small = materialize_tool_result("sandbox_read_file", "hello")
+    assert small.strategy == "full"
+    assert small.content == "hello"
+    assert small.omitted_chars == 0
+
+
+def test_materialize_json_keeps_head_only(monkeypatch) -> None:
+    """JSON 结果只保留开头：尾部是数据末尾 + 闭合括号，拼接后语义反而失真。"""
+    monkeypatch.setenv("EDITH_TOOL_RESULT_MAX_CHARS", "500")
+    raw = json.dumps({"path": "a.py", "content": "y" * 3000}, ensure_ascii=False)
+    m = materialize_tool_result("mcp__fs__read", raw)
+    assert m.strategy == "json_head"
+    assert m.content.startswith('{"path"')
+    assert not m.content.endswith("}")
+
+
+def test_materialize_error_uses_tighter_budget(monkeypatch) -> None:
+    """错误结果预算更小，但同样保头保尾（traceback 的关键结论常在最末行）。"""
+    monkeypatch.setenv("EDITH_TOOL_RESULT_MAX_CHARS", "5000")
+    monkeypatch.setenv("EDITH_TOOL_RESULT_ERROR_MAX_CHARS", "300")
+    raw = "Traceback:\n" + "z" * 2000 + "\nValueError: boom"
+    m = materialize_tool_result("sandbox_run_command", raw, is_error=True)
+    assert m.truncated
+    assert len(m.content) < 1000
+    assert m.content.endswith("ValueError: boom")
+
+
+def test_materialize_is_pure_and_idempotent() -> None:
+    """同一输入永远同一输出，且不修改入参。
+
+    这是「历史不可变」的必要条件：定型是纯函数，重复调用（重试、续跑重放、
+    缓存命中复用）都不会让同一条消息的内容发生漂移。
+    """
+    raw = "a" * 30000
+    first = materialize_tool_result("sandbox_read_file", raw)
+    second = materialize_tool_result("sandbox_read_file", raw)
+    assert first == second
+    assert raw == "a" * 30000  # 入参未被就地改写
+    # 对已定型内容再定型：原样返回，不二次裁剪（否则标记里的「原 N 字符」会漂移）
+    again = materialize_tool_result("sandbox_read_file", first.content)
+    assert again.strategy == "already_materialized"
+    assert again.content == first.content
+
+
+def test_materialize_json_skeleton_keeps_pagination_fields(monkeypatch) -> None:
+    """只保留开头会丢尾部关键字段：骨架必须把顶层标量字段带出来。
+
+    `next_cursor` / `has_more` / `total` 常常出现在 JSON 末尾，裁掉它们模型就
+    不知道还有下一页，会直接宣称「已全部读取」。骨架按**值的类型**区分（标量全留、
+    容器只报形状），不依赖字段名——换个工具、换套字段依然成立。
+    """
+    monkeypatch.setenv("EDITH_TOOL_RESULT_MAX_CHARS", "1200")
+    raw = json.dumps(
+        {
+            "records": [{"i": i, "text": "x" * 20} for i in range(200)],
+            "next_cursor": "abc123",
+            "has_more": True,
+            "total": 10000,
+        },
+        ensure_ascii=False,
+    )
+    m = materialize_tool_result("mcp__db__query", raw)
+    assert m.strategy == "json_head"
+    assert m.truncated
+    # 尾部标量字段通过骨架保留（原始开头根本到不了这里）
+    assert "abc123" in m.content
+    assert "has_more" in m.content
+    assert "10000" in m.content
+    # 必须明确告知「这是片段」，不能让模型当成完整结果
+    assert "被截断的 JSON 片段" in m.content
+    # 容器只报形状，不搬内容
+    assert "200 项，正文已省略" in m.content
+
+
+def test_materialize_not_fooled_by_mark_in_content(monkeypatch) -> None:
+    """读到含定型标记的文件时不能被误判成「已定型」而跳过裁剪。
+
+    最典型的场景就是读这个模块自己的源码。所以幂等判定除了匹配标记，
+    还要求长度刚好略超预算（定型输出的固有特征）。
+    """
+    monkeypatch.setenv("EDITH_TOOL_RESULT_MAX_CHARS", "500")
+    raw = "def f():\n    return '工具结果已裁剪 [v1]'\n" + "x" * 5000
+    m = materialize_tool_result("sandbox_read_file", raw)
+    assert m.truncated
+    assert m.strategy == "head_tail"
+
+
+def test_count_oversized_flags_bypassing_paths(monkeypatch) -> None:
+    """只读审计：正常路径恒为 0；有人绕过定型时能被数出来（但不改写）。"""
+    monkeypatch.setenv("EDITH_TOOL_RESULT_MAX_CHARS", "100")
+    messages = [
+        {"role": "tool", "content": materialize_tool_result("x", "q" * 1000).content},
+        {"role": "assistant", "content": "z" * 5000},
+    ]
+    assert count_oversized_tool_results(messages) == 0
+    messages.append({"role": "tool", "content": "q" * 1000})  # 假设的绕过路径
+    assert count_oversized_tool_results(messages) == 1
+    assert len(messages[-1]["content"]) == 1000  # 审计不改写
 
 
 # ---- 五、读取效率（B3 大文件按行读 / B4 保首保尾）----
@@ -271,10 +372,14 @@ def test_workspace_path_authorization() -> None:
         "workspace/MINE/x.py", True, "MINE"
     ).endswith("/workspace/MINE/x.py")
     assert workspace_path("uploads/a.txt", True, "MINE").endswith("/uploads/a.txt")
-    # 未传 current_workspace_id 时保持旧行为（向后兼容）
-    assert workspace_path("workspace/ANY/x.py", True).endswith("/workspace/ANY/x.py")
+    # 没有工作区上下文 → 拒绝（这里曾经「不传就跳过校验」= fail-open：
+    # 文件面板只拿得到 sessionId，任何一个会话都能拼出别的 workspace/{id}/ 路径）
+    with pytest.raises(PermissionError):
+        workspace_path("workspace/ANY/x.py", True)
+    # 命名空间本身（缺 ID 段）→ 补全为当前工作区，而不是报「必须带 ID」
+    assert workspace_path("workspace", True, "MINE").endswith("/workspace/MINE")
     # 格式校验不受影响
-    for bad in ("/etc/passwd", "workspace", "../x", "etc/x"):
+    for bad in ("/etc/passwd", "../x", "etc/x"):
         with pytest.raises(ValueError):
             workspace_path(bad, allow_root=False, current_workspace_id="MINE")
 

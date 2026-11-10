@@ -72,20 +72,35 @@ class Service:
                 "invalid_request", "sessionKey is required for trusted channels"
             )
         try:
-            response = await self.agent_runs.run(
+            stream, run_error = await self.agent_runs.run(
                 to_agentrun_request(input_msg, user_id, session_id)
             )
             duration_ms = (time.monotonic() - start_time) * 1000
-            logger.info(
-                "gateway_run_end request_id=%s duration_ms=%.2f has_error=false",
-                request_id,
-                duration_ms,
-            )
-            return response
+            # 这里返回的是「已启动」，不是「已结束」：agent_runs.run 只负责准入
+            # 与起 task，真正的执行结果在事件流里。老日志叫 gateway_run_end 并且
+            # 无条件写 has_error=false，于是「准入就失败（如模型 402）」和
+            # 「正常跑完」在日志里长得一模一样——一次连续 4 次失败就是这么被
+            # 误读成「在跑」的。现在按返回值如实分岔。
+            if run_error is not None:
+                logger.warning(
+                    "gateway_run_started request_id=%s duration_ms=%.2f has_error=true "
+                    "error_type=%s error=%s",
+                    request_id,
+                    duration_ms,
+                    run_error.type,
+                    run_error.message,
+                )
+            else:
+                logger.info(
+                    "gateway_run_started request_id=%s duration_ms=%.2f has_error=false",
+                    request_id,
+                    duration_ms,
+                )
+            return stream, run_error
         except Exception as e:
             duration_ms = (time.monotonic() - start_time) * 1000
             logger.exception(
-                "gateway_run_end request_id=%s duration_ms=%.2f has_error=true error_type=%s",
+                "gateway_run_started request_id=%s duration_ms=%.2f has_error=true error_type=%s",
                 request_id,
                 duration_ms,
                 type(e).__name__,
@@ -97,6 +112,17 @@ class Service:
     ) -> tuple[Status | None, Error | None]:
         """查询一个属于可信 Clerk 用户的活跃任务。"""
         return self.agent_runs.status(user_id, request_id)
+
+    def resume(
+        self, user_id: str, request_id: str, after: int = 0
+    ) -> tuple[Stream | None, Error | None]:
+        """重新订阅一个已在运行（或刚结束）的任务的事件流。
+
+        这是断流重连的入口。它只回放、不启动：刷新页面时前端的旧连接没了，
+        但后端 run 还在跑、事件也都在日志里，带 `after=<已收到的最大 seq>`
+        回来就能先补齐错过的部分，再无缝接上实时。
+        """
+        return self.agent_runs.subscribe(user_id, request_id, after)
 
     def cancel(self, user_id: str, request_id: str) -> Error | None:
         """停止一个属于可信 Clerk 用户的活跃任务。"""

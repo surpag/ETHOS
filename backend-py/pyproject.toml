@@ -24,6 +24,7 @@ dependencies = [
 [project.scripts]
 edith-backend = "edith_backend.main:main"
 edith-trace = "edith_backend.internal.trace.viewer:main"
+edith-skill-migrate = "edith_backend.internal.skills.migrate:main"
 
 [build-system]
 requires = ["uv_build>=0.12.1,<0.13.0"]

@@ -52,7 +52,8 @@
 | `Adapter.stream_message`（路由处理器） | `adapter.py` | `POST /internal/gateway/messages:stream`；把 `MessageRequest` 转换为 `gateway.IncomingMessage`（`channel=WEB_CHANNEL`）调用 `gateway.run`，成功则返回 SSE `StreamingResponse` |
 | `Adapter.run_status`（路由处理器） | `adapter.py` | `GET /internal/gateway/runs/{request_id}`（查询参数 `userId`）；调用 `gateway.status`，返回 `{"requestId": ..., "status": ...}` |
 | `Adapter.cancel_run`（路由处理器） | `adapter.py` | `POST /internal/gateway/runs/{request_id}/cancel`（查询参数 `userId`）；调用 `gateway.cancel`，无返回体 |
-| `event_generator`（闭包） | `adapter.py` | 从 `stream.events`（`asyncio.Queue[Event \| None]`）消费事件；`None` 哨兵结束；每个事件序列化为 `data: {...}\n\n` 帧 |
+| `Adapter.resume_run_events`（路由处理器） | `adapter.py` | `GET /internal/gateway/runs/{request_id}/events?userId=&after=`；断流重连入口，调用 `gateway.resume` 后返回 SSE。先把 `after` 之后已发生的事件补发完，再接上实时；run 已结束也能补完即关闭 |
+| `_sse_response`（模块级函数） | `adapter.py` | `(events: AsyncIterator[Event \| None]) -> StreamingResponse`；统一 SSE 序列化（`by_alias=True` + `exclude_none=True`）与响应头，三条路由共用，避免两套口径漂移 |
 | `_gateway_error_to_http`（模块级函数） | `adapter.py` | `(error: Error) -> EDITHError`；按 `error.type` 映射 HTTP 状态码并构造统一错误（对应 Go 版 `writeGatewayError`，见 `control.go`） |
 | `MessageRequest`（Pydantic 模型） | `types.py` | 请求体契约：`request_id` / `user_id` / `session_id` / `message` / `image_ids` / `upload_paths` / `model_id` / `reasoning_option_id`；`alias_generator=to_camel`、`populate_by_name=True`、`extra="forbid"` |
 
@@ -62,7 +63,7 @@
 
 | 依赖 | 用途 |
 |---|---|
-| `..gateway.service`（`Service as GatewayService`） | 构造器注入的下游服务，提供 `run` / `status` / `cancel` 三个方法 |
+| `..gateway.service`（`Service as GatewayService`） | 构造器注入的下游服务，提供 `run` / `status` / `cancel` / `resume` 四个方法 |
 | `..gateway.types`（`WEB_CHANNEL`、`IncomingMessage`） | 渠道常量（`"web"`）与渠道消息载体，构造 `gateway.run` 的入参 |
 | `..agentrun.types`（`Error`） | 下游返回的错误类型，作为 `_gateway_error_to_http` 的输入 |
 | `..agentstream.types`（`Event`） | 渠道中性的流式事件模型，SSE 序列化对象 |
@@ -123,7 +124,8 @@ Web BFF / 前端（按 camelCase 字段读取事件）
 2. **可信渠道直通**：`WEB_CHANNEL = "web"` 属于可信渠道（`gateway/service.py` `_is_trusted_channel`），Gateway 不做 bindings 身份转换，直接用 `external_user_id` 作为 EDITH `user_id`；`userId` 必须由 Web BFF 从 Clerk 注入（`types.py` 文档注释），浏览器不能自行提供。
 3. **SSE 序列化契约**：`Event.model_dump_json(exclude_none=True, by_alias=True)` 输出 camelCase（`assistantId` / `blockId` / `toolCallId` / `sessionUsage` 等），与 Go 版 `agentstream.Event` 的 json tag 保持一致，前端按 camelCase 读取；`exclude_none=True` 省略空字段（对齐 Go 的 `omitempty`）。
 4. **SSE 响应头**：`media_type="text/event-stream"`，并设置 `Cache-Control: no-cache, no-transform` 与 `X-Accel-Buffering: no`（防止 Nginx 缓冲导致流不实时），与 Go 版 `stream.go` 一致。
-5. **事件流终止**：`Stream.events` 队列的 `None` 哨兵表示事件流结束（对应 Go 版 channel 关闭），消费到即 `break` 关闭 SSE 流。
+5. **事件流终止**：`Stream.open(after)` 返回的异步迭代器以 `None` 哨兵结束（对应 Go 版 channel 关闭），消费到即 `break` 关闭 SSE 流。
+6. **可重放事件流（断流重连）**：`Stream` 持有的不是一次性队列，而是 `agentrun.run_log.RunEventLog`——一条带单调 `seq` 的进程内事件日志。首连用 `open(0)`；刷新页面/断网后用 `open(after=已收到的最大 seq)` 回来，先补发错过的历史再接实时，已经发生的工具调用与正文不会因为连接断了而消失。run 收尾后日志在 `agentrun.Service._archived_logs` 暂存 10 分钟，覆盖「刷新时 run 刚好结束」。**边界**：日志在进程内，后端重启即丢失，此时重连返回 404，前端退回「拉历史」。
 6. **请求体严格校验**：`MessageRequest` 配置 `extra="forbid"`，未知字段会触发 `RequestValidationError`，由全局处理器统一返回 `400 invalid_request`（对齐 Go 版 `ReadJSON` 的 `DisallowUnknownFields` 行为）。
 7. **与 Go 版的一个行为差异**：取消路由 `cancel_run` 处理器返回 `None`（FastAPI 默认 200 空响应），而 Go 版 `control.go` 显式返回 `204 No Content`——前端若依赖 204 需注意（见 ③ 异常处理）。
 
@@ -139,7 +141,7 @@ Web BFF / 前端（按 camelCase 字段读取事件）
 | `EDITHError` | 由 `http_utils.register_error_handler`（`main.py` 注册）统一转为 `{"type","message"}` JSON 响应 | `http_utils.py` |
 | `RequestValidationError`（请求体校验失败，含未知字段） | 统一转为 `400 {"type":"invalid_request","message":"invalid request"}` | `http_utils.py` |
 
-无降级逻辑。SSE 客户端断开后的事件写失败在 Python 版未做显式处理（Go 版 `stream.go` 用 `clientConnected` 标志停止继续写流；Python 版依赖 `StreamingResponse` 的异步迭代在客户端断开时自行终止，行为差异未在代码中显式管理，待确认是否需要）。
+无降级逻辑。SSE 客户端断开不再造成事件丢失：事件先进 `RunEventLog` 再扇出，写失败只影响这一个订阅者，日志本身完整，重连（`/runs/{id}/events?after=`）可以补回。Go 版 `stream.go` 用 `clientConnected` 标志停止继续写流；Python 版依赖 `StreamingResponse` 的异步迭代在客户端断开时终止、由 `open()` 的 `finally` 注销订阅者，语义等价且不丢数据。
 
 ### ④ 扩展点
 

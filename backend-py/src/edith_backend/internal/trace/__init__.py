@@ -12,6 +12,7 @@ from .tracer import Tracer, format_traceback, new_tracer, now_iso
 from .types import (
     AGENTRUN,
     CANCELED,
+    DEGRADE_MCP,
     DEGRADE_MODEL,
     DEGRADE_SANDBOX,
     DEGRADE_SUMMARY,
@@ -26,6 +27,7 @@ from .types import (
     STATUS_LABELS,
     SUMMARY,
     TOOL_CALL,
+    VERIFY,
     Trace,
     TraceStep,
 )
@@ -33,6 +35,7 @@ from .types import (
 __all__ = [
     "AGENTRUN",
     "CANCELED",
+    "DEGRADE_MCP",
     "DEGRADE_MODEL",
     "DEGRADE_SANDBOX",
     "DEGRADE_SUMMARY",
@@ -47,6 +50,7 @@ __all__ = [
     "STATUS_LABELS",
     "SUMMARY",
     "TOOL_CALL",
+    "VERIFY",
     "Store",
     "Trace",
     "TraceStep",

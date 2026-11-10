@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from edith_backend.internal.agentrun.execution import build_messages
+from edith_backend.internal.agentrun.execution import SUMMARY_TAG, build_messages
 from edith_backend.internal.agentrun.service import (
     _normalize_request,
     _validate_request,
@@ -90,13 +90,13 @@ def test_validate_request_rules() -> None:
 
 def test_build_messages_order() -> None:
     history = [{"role": "user", "content": "上一条"}, {"role": "assistant", "content": "上一条回复"}]
-    # 无摘要：直接拼 history
+    # 无摘要：直接拼 history，系统指令是唯一的 system 消息
     messages = build_messages("你是助手", history, [], "", "当前问题")
     assert messages[0] == {"role": "system", "content": "你是助手"}
     assert messages[1]["role"] == "user"
     assert messages[2]["role"] == "assistant"
     assert messages[-1] == {"role": "user", "content": "当前问题"}
-    # 有摘要：system 追加摘要段，并用 recent_history 取代 history
+    # 有摘要：摘要独立成条 system，紧随指令之后；系统指令正文不被改写
     messages = build_messages(
         "你是助手",
         history,
@@ -104,7 +104,9 @@ def test_build_messages_order() -> None:
         "早前聊过天气",
         "当前问题",
     )
-    assert messages[0]["role"] == "system"
-    assert "早前聊过天气" in messages[0]["content"]
-    assert messages[1]["content"] == "最近一条"
+    assert messages[0] == {"role": "system", "content": "你是助手"}
+    assert messages[1]["role"] == "system"
+    assert messages[1]["content"].startswith(SUMMARY_TAG)
+    assert "早前聊过天气" in messages[1]["content"]
+    assert messages[2]["content"] == "最近一条"
     assert messages[-1] == {"role": "user", "content": "当前问题"}

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from ..session.plan_store import RunPlanStore
 from ..session.store import SessionStore
 from ..usage.reader import Reader
 from .history import History
@@ -18,11 +19,13 @@ class Module:
         self.http = http
 
 
-def new_module(store: SessionStore, usage: Reader) -> Module:
+def new_module(
+    store: SessionStore, usage: Reader, plans: RunPlanStore | None = None
+) -> Module:
     """创建会话模块；会话存储和用量读取器都由调用方持有。"""
     if store is None:
         raise ValueError("conversation session store is required")
     if usage is None:
         raise ValueError("conversation usage reader is required")
-    history = History(store, usage)
+    history = History(store, usage, plans)
     return Module(HTTP(history))

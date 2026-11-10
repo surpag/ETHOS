@@ -32,8 +32,10 @@ class Adapter:
         if run_error is not None:
             raise RuntimeError(f"start cron agent run: {run_error.message}")
         execution_error: Exception | None = None
-        while True:
-            event = await stream.events.get()
+        # 事件流现在是可重放的日志（订阅式），仍然读到 None 哨兵为止；
+        # 定时任务没有「重连」需求，但它必须与 Web 渠道消费同一种流，
+        # 否则两边对「流结束」的理解会悄悄分叉。
+        async for event in stream.open(0):
             if event is None:
                 break
             if event.type == "run.error" and event.error is not None:

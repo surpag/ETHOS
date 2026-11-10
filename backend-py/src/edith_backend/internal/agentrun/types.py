@@ -5,10 +5,14 @@
 
 from __future__ import annotations
 
-import asyncio
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from ..agentstream.types import Event
+
+if TYPE_CHECKING:
+    from .run_log import RunEventLog
 
 
 @dataclass
@@ -41,10 +45,17 @@ class Error:
 class Stream:
     """AgentRun 的唯一输出；调用方必须消费到收到 None 哨兵。
 
-    events 队列中的 None 表示事件流结束（对应 Go 版 channel 关闭）。
+    它不是一次性队列，而是一份**可重放的日志**（见 run_log.RunEventLog）：
+    同一份日志可以被多个订阅者同时消费、也可以被中途加入的订阅者从某个
+    seq 之后补发。这是「刷新页面还能实时看到执行过程」的前提——刷新 =
+    旧订阅者消失、新订阅者带上 after 回来，事件本身一条都没丢。
     """
 
-    events: asyncio.Queue[Event | None]
+    log: RunEventLog
+
+    def open(self, after: int = 0) -> AsyncIterator[Event | None]:
+        """订阅事件流（先补发 after 之后的历史，再接实时）。"""
+        return self.log.open(after)
 
 
 @dataclass

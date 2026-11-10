@@ -13,7 +13,9 @@
 | 文件 | 一句话职责 |
 | --- | --- |
 | `__init__.py` | 模块出口：导出 `Dependencies`、`Service`、`Error`、`Request`、`Status`、`Stream` |
-| `types.py` | 核心类型定义：`Request`（执行输入）、`Error`（失败描述）、`Stream`（事件流输出）、`Status`（活跃任务状态） |
+| `types.py` | 核心类型定义：`Request`（执行输入）、`Error`（失败描述）、`Stream`（可重放事件流）、`Status`（活跃任务状态） |
+| `run_log.py` | `RunEventLog`：一个 run 的事件日志（单调 `seq` + 多订阅者 + 可重放），断流重连的数据基础 |
+| `progress.py` | `ProgressRecorder`：把 run 的中间态（推理/正文/工具调用）持续写进该 run 的那条 assistant 消息，刷新后历史里当场可见；终态写入覆盖它 |
 | `configuration.py` | 配置聚合：把模型、密钥、人格、Skill、图片、上传文件、MCP 工具加载为一次可执行的 `ConfiguredRun` |
 | `execution.py` | 执行层：用 `AsyncOpenAI` 手写流式循环与工具调用循环，产出渠道中性事件并持久化回复 |
 | `service.py` | 服务层：`Service.run/status/cancel` 主流程与任务生命周期（`_run`）管理，含 `Dependencies` 依赖容器 |
@@ -43,7 +45,8 @@ HTTP 边界由 `webadapter.Adapter`（`internal/webadapter/adapter.py`）承担�
 | 依赖注入（组合根装配） | `service.py: Dependencies`、`main.py: Service(Dependencies(...))` | 所有长期能力经 `Dependencies` 一次性注入；`RunConfigurations.__init__` 同样以构造注入方式接收各模块 |
 | 适配器 | `webadapter/adapter.py`（HTTP/SSE → gateway）、`gateway/service.py`（渠道身份 → EDITH 身份） | 本模块是适配链的最内层，只认 EDITH 身份的 `Request` |
 | 策略（可替换执行器） | `execution.py: chat()` 中 `tool_executor` 参数；`MCPToolContext` 与 `ToolRegistry` 均实现 `execute` | 工具执行按名分发：MCP 工具优先，否则交给注入的 `tool_executor` |
-| 生产者-消费者 | `types.py: Stream`（`asyncio.Queue`）、`service.py: _run`（生产）、`webadapter/adapter.py`（消费） | `_run` 任务往队列写 `Event`，队列中的 `None` 表示流结束（对应 Go 版 channel 关闭） |
+| 事件出口 | `execution.py: emit`（唯一出口）→ `events.publish`（实时补发）+ `progress.observe`（落库） | 两条消费者共用一个入口：少通知一处就会出现「实时有、刷新后没有」的不对称 |
+| 生产者-消费者 | `types.py: Stream`（`RunEventLog`）、`service.py: _run`（生产）、`webadapter/adapter.py` 与 `cronadapter/adapter.py`（消费） | `_run` 通过 `events.publish()` 追加并扇出，`events.close()` 投 `None` 哨兵表示流结束。日志可被多个订阅者同时消费、也可从中途 `after=N` 加入重放，因此连接断开不等于事件丢失 |
 | 状态机（任务生命周期） | `service.py: _run` | `run.started` →（`message.delta` / `reasoning.delta` / `tool.started` / `tool.finished`）* → `run.completed` / `run.canceled` / `run.error` → `None` 哨兵 |
 | 门闩（会话级互斥） | `session_lanes.py: SessionLanes` | `acquire/release`；asyncio 单线程事件循环下 `dict` 操作天然原子，无需显式加锁（见文件头注释） |
 | 共享状态（单例持有） | `service.py: Service.active`（活跃任务表）、`user_stops.py: UserStops` | `Service` 生命周期内共享，跨请求查询/取消 |
@@ -54,15 +57,15 @@ HTTP 边界由 `webadapter.Adapter`（`internal/webadapter/adapter.py`）承担�
 | --- | --- | --- |
 | `Request` | `types.py` | 已完成后台身份与会话转换的执行输入（dataclass：request_id / user_id / session_id / message / image_ids / upload_paths / model_id / reasoning_option_id） |
 | `Error` | `types.py` | 任务启动、执行或控制失败描述；`to_dict() -> {"type", "message"}` |
-| `Stream` | `types.py` | 模块唯一输出；`events: asyncio.Queue[Event \| None]`，调用方必须消费到 `None` 哨兵 |
+| `Stream` | `types.py` | 模块唯一输出；持有 `RunEventLog`，用 `stream.open(after)` 订阅（先补发 `after` 之后的历史再接实时），调用方必须消费到 `None` 哨兵 |
 | `Status` | `types.py` | 活跃任务状态（request_id、status="running"） |
 | `ConfiguredRun` | `configuration.py` | 可直接交给执行层的完整运行输入（request / definition / api_key / system_instruction / image_urls / message / mcp_tools） |
 | `RunConfigurations` | `configuration.py` | 配置聚合器；`async load(request: Request) -> ConfiguredRun \| Error` |
 | `message_with_uploads` | `configuration.py` | 把附件名称以 Markdown 形式追加进用户消息，保证会话历史可展示本次上传 |
-| `run_instruction` / `skill_instruction` | `configuration.py` | 把公共/用户 Skill 摘要与上传文件路径拼成系统指令里的 Instruction 段落 |
-| `Dependencies` | `service.py` | AgentRun 的依赖容器（dataclass：models / settings / providers / store / usage / skills / images / files / mcp / tool_definitions / tool_executor） |
+| `render_skill_instruction` / `run_instruction` / `skill_instruction` | `configuration.py:386` / `:334` / `:470` | 把 **`ResolvedCatalog`**（`skills/resolver.py` 的解析产物）渲染成 Instruction 段落：唯一来源是 `entries`（已裁决、name 唯一），受 L1 索引预算约束，返回 `SkillInstruction{text, injected, omitted, budget_chars}`。`skill_instruction()` 是只要文本的兼容包装 |
+| `Dependencies` | `service.py` | AgentRun 的依赖容器（dataclass：models / settings / providers / store / usage / skills / skill_scopes / images / files / mcp / tool_definitions / tool_executor）。`skill_scopes` 是项目级的**作用域分发点**——解析器靠它按 `workspace_id` 取门面，不传时项目层报「未配置」而不是报错 |
 | `ActiveRun` | `service.py` | 一个仍在执行的活跃任务（user_id / session_id / task: asyncio.Task） |
-| `Service` | `service.py` | `async run(request) -> (Stream \| None, Error \| None)`；`status(user_id, request_id)`；`cancel(user_id, request_id)`；`async _run(...)` 生命周期 |
+| `Service` | `service.py` | `async run(request) -> (Stream \| None, Error \| None)`；`status(user_id, request_id)`；`cancel(user_id, request_id)`；`subscribe(user_id, request_id, after)`（断流重连）；`async _run(...)` 生命周期 |
 | `_normalize_request` / `_validate_request` | `service.py` | 请求字段 trim 规范化；必填校验（requestId/userId/sessionId 必填；message/imageIds/uploadPaths 至少一项） |
 | `_summary_to_session_usage` | `service.py` | `usage.Summary` → `agentstream.SessionUsage` |
 | `SessionLanes` | `session_lanes.py` | `acquire(user_id, session_id, request_id) -> bool`；`release(...)`；同一 `(user_id, session_id)` 只允许一个活跃任务 |
@@ -87,7 +90,7 @@ HTTP 边界由 `webadapter.Adapter`（`internal/webadapter/adapter.py`）承担�
 | `userconfig.mcp_runtime`（`MCPRuntime` / `MCPToolContext`） | `configuration.py` | 打开用户启用的 MCP 服务工具（每次 run 一个连接上下文） |
 | `session.store`（`SessionStore`） | `execution.py`、`service.py` | 消息持久化：写用户消息、写 assistant 回复、读历史 |
 | `usage.recorder`（`Recorder` / `RunAlreadyExists`）与 `usage.types`（`Run` / `Summary`） | `service.py` | 用量记录：start / finish / fail 与会话用量汇总 |
-| `skills.catalog`（`Catalog`）+ `skills.types`（`SkillSummary` / `SYSTEM_PATH` / `CUSTOM_PATH`） | `configuration.py` | 公共 Skill 摘要与用户 overview，拼进系统指令 |
+| `skills.catalog`（`Catalog`）+ `skills.resolver`（`SkillResolver` / `ResolvedCatalog`）+ `skills.storage.scopes`（`SkillScopeStores`） | `configuration.py` | 三层 Skill 解析（平台 / 用户 / 有 workspace 时的项目）与同名裁决；裁决结果与覆盖记录落 trace 的 `skills.summaries` 步骤 |
 | `images.agent_input`（`AgentInput`） | `configuration.py`（经 `Dependencies.images` 注入） | 把图片 ID 转为本次调用可访问的短期 URL |
 | `sandbox.agent_input`（`AgentInput`） | `configuration.py`（经 `Dependencies.files` 注入） | 校验上传文件只能引用当前用户当前会话 `uploads/` 内的普通文件 |
 | `tools`（`ToolRegistry`） | `main.py` 装配后经 `Dependencies.tool_definitions` / `tool_executor` 注入 | 静态工具（系统工具 / Sandbox 工具 / Cron 工具）的定义与执行分发 |
@@ -167,7 +170,7 @@ webadapter 消费队列                          (webadapter/adapter.py)
 1. **唯一执行入口与主流程**（`service.py: Service.run`）：规范化 → 校验 → 会话准入 → 配置聚合 → 记录用量 → 启动流式执行；启动失败统一返回 `(None, Error)`，调用方（webadapter）负责转 HTTP 错误。
 2. **会话级串行**（`session_lanes.py`）：同一 `(user_id, session_id)` 同一时间只允许一个任务，抢占失败返回 `session_busy`；所有出口（错误、完成、取消）都必须 `release`。
 3. **配置聚合顺序与降级**（`configuration.py: RunConfigurations.load`）：模型解析优先级为「请求指定 → 用户默认模型 → `DEFAULT_MODEL_ID`」；图片输入要求模型 `vision=True`；密钥缺失、上传文件校验失败、图片加载失败均统一转为 `Error("invalid_request", ...)`；Skill/MCP 为可选依赖，未注入则跳过。
-4. **手写流式执行与工具循环**（`execution.py: chat`）：不使用 trpc-agent-go（Go 版方案 A），直接 `AsyncOpenAI` 流式调用（方案 B）；`StreamDecoder` 把增量编码为带块 ID 的中性事件；工具调用按 index 聚合参数、最多 8 轮（`MAX_TOOL_ROUNDS`），MCP 工具名优先匹配，其次 `tool_executor`；达到轮数上限仍持续调用工具时按正常结束处理并持久化已生成内容。
+4. **手写流式执行与工具循环**（`execution.py: chat`）：不使用 trpc-agent-go（Go 版方案 A），直接 `AsyncOpenAI` 流式调用（方案 B）；`StreamDecoder` 把增量编码为带块 ID 的中性事件；工具调用按 index 聚合参数、最多 8 轮（`MAX_TOOL_ROUNDS`），MCP 工具名优先匹配，其次 `tool_executor`；达到轮数上限仍持续调用工具时按正常结束处理并持久化已生成内容。**入口处绑定本 run 的 Skill 加载账本**（`bind_skill_load_budget`，`ContextVar` 作用域 = 本 task），收尾时把 `loadedSkills`/`loadedBytes`/`denied` 并入 `completion` 这条 trace——它必然执行，所以"要么有数、要么没跑完"。
 5. **生命周期事件与收尾**（`service.py: _run`）：`run.started` → 内容/工具事件 → `run.completed`（携带会话用量汇总）/ `run.canceled`（用户主动取消时）/ `run.error`（异常，`APIError(type="internal_error")`）；`finally` 中关闭 MCP 连接、释放会话门闩、从 `active` 移除、发送 `None` 哨兵，保证调用方不会悬挂。
 6. **用量记录**（`usage.recorder`）：`start` 幂等防重（重复 requestId → `request_conflict`）；`finish` 写 token 用量并返回会话汇总（含 cache 命中率）；`fail` 标记失败运行且不计入会话汇总。
 7. **身份与消息归一化**：`_normalize_request` 对所有字符串字段 trim；用户消息在配置聚合阶段追加附件清单（`message_with_uploads`），并在执行前先持久化（`add_user_message`）供会话历史回放。

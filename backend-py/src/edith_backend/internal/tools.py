@@ -126,7 +126,5 @@ class ToolRegistry:
             return await tool_set.execute(
                 name, arguments, user_id, session_id, workspace_id
             )  # 执行三个不同类型的tool，systemtool,sandbox,CronTool
-        except (
-            Exception
-        ) as exc:  # noqa: BLE001 - 兜底：业务错误 → command_error，系统故障 → tool_failure
+        except Exception as exc:  # noqa: BLE001 - 单个工具的任何异常都转成工具结果返回
             return tool_error_result(name, exc)

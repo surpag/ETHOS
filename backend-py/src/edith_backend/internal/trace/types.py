@@ -23,6 +23,9 @@ SUMMARY = "summary"
 LLM_CALL = "llm_call"
 TOOL_CALL = "tool_call"
 MEMORY = "memory"
+# 完成校验：run 收尾时把「模型声称」与「本轮真实发生的事实」并排记录。
+# 它不做判断也不阻断，只让「有没有证据」从一件靠感觉的事变成一行可查的数据。
+VERIFY = "verify"
 
 # ── trace 状态 ────────────────────────────────────────────────────────
 RUNNING = "running"
@@ -37,10 +40,11 @@ STATUS_LABELS = {
     ERROR: "失败",
 }
 
-# 降级类型（EDITH 有三条降级链，必须显式可见）
+# 降级类型（EDITH 有四条降级链，必须显式可见）
 DEGRADE_MODEL = "model_fallback"
 DEGRADE_SUMMARY = "summary_fallback"
 DEGRADE_SANDBOX = "sandbox_fallback"
+DEGRADE_MCP = "mcp_unavailable"
 
 # 文本摘要上限；EDITH_TRACE_FULL=1 时存原文截断（排错临时开，见 README 隐私约定）
 _DIGEST_LIMIT = 200

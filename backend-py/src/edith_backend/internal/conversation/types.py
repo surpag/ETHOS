@@ -9,6 +9,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
+from ..agentstream.types import PlanSnapshot
 from ..usage.types import Summary
 
 
@@ -45,8 +46,17 @@ class WorkspaceSessionResponse(BaseModel):
 class ConversationResponse(BaseModel):
     """一个会话的 Timeline 和用量 HTTP 响应。"""
 
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
     timeline: Timeline
     usage: Summary
+    # 该会话最近一轮的计划快照。计划是 run 级状态、一轮一份：只给「最近一份」
+    # 就够——前端按 requestId 把它挂到产生它的那一轮下面，新的一轮不会继承它。
+    plan: PlanSnapshot | None = None
+    # 任务状态（in_progress/completed/canceled）；None = 从未有 run。
+    # 这是「还有没跑完的活」的**权威来源**：刷新后仍然存在，
+    # 不依赖前端 sessionStorage 里那份一次性的 pending 记录。
+    task_status: str | None = None
 
 
 class UserImage(BaseModel):
@@ -92,6 +102,17 @@ class AssistantBlock(BaseModel):
     blocks: list[AssistantContentBlock] = Field(default_factory=list)
     # 本轮耗时（毫秒）；旧数据或未记录时为 None
     duration_ms: int | None = None
+    # 完成证据等级（mutated/external/read_only/none）。
+    # None = 未知（该字段引入前的历史消息），UI 不应把它显示成「无工具调用」。
+    completion_evidence: str | None = None
+    # 任务语义（complete/incomplete）；None = 未知（该字段引入前的历史消息）。
+    # 由服务端从 end_reason 派生后下发，UI 不参与判定，只负责呈现。
+    outcome: str | None = None
+    # 终止原因，仅用于选择提示文案；未知原因必须走兜底文案，不能静默。
+    end_reason: str | None = None
+    # 产生这条回复的 run。计划按 run 归档（run_plans.request_id），前端据此把
+    # 计划面板定位到它所属的那一轮；None = 旧数据，前端退化为按会话展示。
+    request_id: str | None = None
 
 
 class ErrorBlock(BaseModel):

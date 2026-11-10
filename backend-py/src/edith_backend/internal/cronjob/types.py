@@ -37,6 +37,13 @@ class Job:
     next_run_at: datetime | None = None
     running: bool = False
     created_at: datetime | None = None
+    # 最近一次执行的结果。None = 还没跑过（区别于「跑过但成功」）。
+    last_run_at: datetime | None = None
+    last_error: str | None = None
+    last_error_at: datetime | None = None
+    # 连续失败次数：一次失败可能只是网络抖动，连续 N 次才是「这个任务已经坏了」。
+    # 成功一次即清零，所以它是一个「当前是否健康」的指标，不是累计统计。
+    consecutive_failures: int = 0
 
 
 @dataclass
@@ -76,6 +83,11 @@ class JobResponse(BaseModel):
     next_run_at: str | None = None
     running: bool
     created_at: str
+    # null = 还没跑过；有值且 last_error 非空 = 最近一次失败了
+    last_run_at: str | None = None
+    last_error: str | None = None
+    last_error_at: str | None = None
+    consecutive_failures: int = 0
 
 
 class ListResponse(BaseModel):

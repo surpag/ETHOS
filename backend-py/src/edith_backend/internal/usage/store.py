@@ -103,6 +103,44 @@ class Store:
             raise RunNotFound(f"finish agent run {run.request_id}: agent run not found")
         await self._db.commit()
 
+    async def add_auxiliary(self, request_id: str, tokens: Tokens) -> None:
+        """把一次「附属调用」（如自动记忆抽取）的用量并入同一次运行。
+
+        为什么要并进同一行而不是新开一行：`usage_runs` 的一行 = 用户的一次运行，
+        新开一行会让 `total_runs` 从「运行次数」变成「模型调用次数」，把缓存覆盖率
+        的分母搞坏。并进来则保持「一次运行的真实成本」这一个口径。
+
+        缓存字段的处理是这段唯一微妙的地方：只要附属调用没上报 cached，整行就必须
+        变成「未知」（NULL + cache_reported=0）。把 None 当 0 求和会低估命中率，
+        而这正是旧实现踩过的坑。
+        """
+        if not tokens.reported:
+            # 没上报就不加：宁可不计入，也不要往真实账本里掺估算值。
+            return
+        cached = tokens.cached_prompt_tokens
+        await self._db.execute(
+            """
+            UPDATE usage_runs SET
+                prompt_tokens = prompt_tokens + :prompt,
+                completion_tokens = completion_tokens + :completion,
+                total_tokens = total_tokens + :total,
+                cached_prompt_tokens = CASE
+                    WHEN :cached IS NULL THEN NULL
+                    WHEN cached_prompt_tokens IS NULL THEN NULL
+                    ELSE cached_prompt_tokens + :cached END,
+                cache_reported = CASE WHEN :cached IS NULL THEN 0 ELSE cache_reported END
+            WHERE request_id = :request_id
+            """,
+            {
+                "prompt": tokens.prompt_tokens,
+                "completion": tokens.completion_tokens,
+                "total": tokens.total_tokens,
+                "cached": cached,
+                "request_id": request_id,
+            },
+        )
+        await self._db.commit()
+
     async def fail(self, request_id: str) -> None:
         await self._db.execute(
             "UPDATE usage_runs SET status = ?, completed_at = CURRENT_TIMESTAMP WHERE request_id = ? AND status = ?",

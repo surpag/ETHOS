@@ -54,6 +54,7 @@
 | `Service.run(input_msg: IncomingMessage)` | `service.py` | `async def run(...) -> tuple[Stream \| None, Error \| None]`：规范化 → 校验 → 身份翻译 → 转发 `agent_runs.run` |
 | `Service.status(user_id, request_id)` | `service.py` | `-> tuple[Status \| None, Error \| None]`：转发查询属于该用户的活跃任务 |
 | `Service.cancel(user_id, request_id)` | `service.py` | `-> Error \| None`：转发取消属于该用户的活跃任务 |
+| `Service.resume(user_id, request_id, after=0)` | `service.py` | `-> tuple[Stream \| None, Error \| None]`：断流重连，转发 `agent_runs.subscribe`（只回放、不启动） |
 | `new_service(bindings, agent_runs)` | `service.py` | 工厂函数；任一依赖为 `None` 抛 `ValueError("gateway requires bindings and agent runs")` |
 | `_is_trusted_channel(channel)` | `service.py` | `-> bool`：`channel in (WEB_CHANNEL, CRON_CHANNEL)` |
 
@@ -109,12 +110,13 @@ cronjob 调度器 ──▶ cronadapter.Adapter.run_job(job)
 | POST | `/internal/gateway/messages:stream` | `Service.run` |
 | GET | `/internal/gateway/runs/{request_id}`（query：`userId`） | `Service.status` |
 | POST | `/internal/gateway/runs/{request_id}/cancel`（query：`userId`） | `Service.cancel` |
+| GET | `/internal/gateway/runs/{request_id}/events`（query：`userId`、`after`） | `Service.resume` |
 
 **内部方法调用方**：
 
 | 调用方 | 调用点 |
 | --- | --- |
-| `webadapter.adapter.Adapter` | `self.gateway.run/status/cancel`（路由处理器内） |
+| `webadapter.adapter.Adapter` | `self.gateway.run/status/cancel/resume`（路由处理器内） |
 | `cronadapter.adapter.Adapter` | `run_job` 中 `self._gateway.run(...)` |
 | `main.py`（组合根） | `new_gateway_service(users.bindings, agent_runs)` 创建；随后 `Adapter(gateway)`、`CronAdapter(gateway)`、`cron_jobs.new_scheduler(cron_adapter)` |
 
@@ -125,7 +127,7 @@ cronjob 调度器 ──▶ cronadapter.Adapter.run_job(job)
 1. **输入规范化**：`run` 先对 `channel`、`external_user_id`、`session_key` 做 `strip()`；channel 或 external_user_id 为空 → `Error("invalid_request", "channel and externalUserId are required")`。
 2. **可信渠道判定**：`_is_trusted_channel` 认定 `web`/`cron` 为可信渠道，直接使用传入身份（`user_id = external_user_id`，`session_id = session_key`）；此时若 `session_key` 为空 → `Error("invalid_request", "sessionKey is required for trusted channels")`。
 3. **非可信渠道身份翻译**：调用 `bindings.to_clerk_user_id`；`ValueError`（入参为空）→ `Error("internal_error", str(exc))`；未绑定 → `Error("identity_not_bound", ...)`；绑定成功 → `user_id = bound_user_id or ""`（空值兜底），`session_id = f"{channel}:{user_id}"`。
-4. **转发执行**：通过 `to_agentrun_request` 翻译为 `agentrun.Request` 后调用 `agent_runs.run`；`status`/`cancel` 为纯转发（agentrun 侧校验 userId/requestId 非空、校验任务归属，未命中返回 `not_found`）。
+4. **转发执行**：通过 `to_agentrun_request` 翻译为 `agentrun.Request` 后调用 `agent_runs.run`；`status`/`cancel`/`resume` 为纯转发（agentrun 侧校验 userId/requestId 非空、校验任务归属，未命中返回 `not_found`）。
 5. **无状态**：本模块不持有任务状态，活跃任务（`active` 字典、会话车道 `SessionLanes`、用户停止标记）全部在 `agentrun.Service` 内管理。
 
 ## ② 配置项

@@ -50,10 +50,21 @@ class _ServerConnection:
 
 
 class MCPToolContext:
-    """一次 AgentRun 内所有已连接 MCP 服务的工具集合。"""
+    """一次 AgentRun 内所有已连接 MCP 服务的工具集合。
+
+    `failures` 记录**没能连上的**服务。它有独立存在的必要：连接失败以前只是
+    一行 warning 就被 `continue` 掉了，链路追踪里这一步仍然是绿的——于是
+    「MCP 全挂了」在系统里表现为「这个用户没配 MCP 工具」，两种完全不同的
+    处境被压成了同一个现象，用户只能自己去猜为什么工具不见了。
+    """
 
     def __init__(self) -> None:
         self._connections: list[_ServerConnection] = []
+        self.failures: list[dict[str, str]] = []
+
+    @property
+    def failed_count(self) -> int:
+        return len(self.failures)
 
     @property
     def has_tools(self) -> bool:
@@ -174,6 +185,14 @@ class MCPRuntime:
             try:
                 connection = await _connect_server(server, _toolset_name(server))
             except Exception as exc:  # noqa: BLE001 - 单个服务连接失败跳过并记录
+                # 截断错误文本：鉴权失败（401）和网络超时的原文都可能很长，
+                # 但「哪个服务、什么类型、什么状态码」才是有用的那部分。
+                context.failures.append(
+                    {
+                        "server": server.name,
+                        "error": f"{type(exc).__name__}: {exc}"[:200],
+                    }
+                )
                 logger.warning("open MCP server %s: %s", server.name, exc)
                 continue
             context._connections.append(connection)
