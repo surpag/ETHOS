@@ -20,3 +20,6 @@ build/
 .ruff_cache/
 .pytest_cache/
 .mypy_cache/
+
+# pytest --basetemp 落地目录（运行测试时按惯例放这里）
+.pytest-tmp*/

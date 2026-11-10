@@ -91,8 +91,14 @@ edith-architecture-v2.html
 # ---------- 运行期数据（SQLite / 工作区 / 同步共识状态）----------
 /backend-py/workspace-volumes/
 /backend-py/workspace-sync/
+/backend-py/user-skills/
+/backend-py/project-skills/
 /backend-py/db_backup/
 /edith-v2.db
+# 仓库根也曾被当成运行目录：Skill 权威副本与临时库都落在这里
+/user-skills/
+/project-skills/
+/edith-v2.db.*
 
 # 排查进程/数据库锁时留下的临时输出
 /backend-py/kill*.txt
@@ -109,3 +115,9 @@ edith-architecture-v2.html
 /docs/agent-interview-prep.md
 /docs/interview-notes.md
 /docs/偏好.md
+# 框架/数据库学习笔记，属个人材料
+/docs/AIKNOW/
+/docs/learn/
+
+# ---------- 编辑器工作区配置 ----------
+/*.code-workspace
