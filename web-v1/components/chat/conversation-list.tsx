@@ -19,6 +19,8 @@ type ConversationListProps = {
   activePage?: "chat" | "tasks" | "extensions";
   isLoading: boolean;
   sessions: ConversationItem[];
+  /** 正在执行的会话 ID（可多个）。来自 ChatPage 的运行态表，不由本组件推断。 */
+  runningSessionIDs?: string[];
   workspaces?: WorkspaceItem[];
   activeWorkspaceID?: string | null;
   onCreate: (workspaceId?: string) => void;
@@ -39,6 +41,7 @@ export function ConversationList({
   activePage = "chat",
   isLoading,
   sessions,
+  runningSessionIDs = [],
   workspaces = [],
   activeWorkspaceID = null,
   onCreate,
@@ -63,6 +66,11 @@ export function ConversationList({
   // 本次新增：会话 ··· 菜单（归档/取消归档）+ 归档折叠区
   const [openSessionMenuID, setOpenSessionMenuID] = useState<string | null>(null);
   const [archivedOpen, setArchivedOpen] = useState(false);
+
+  // 运行态只改变行尾标识，不参与排序：列表顺序若随状态跳动，
+  // 用户刚点的那一行会从手指底下移走。
+  const runningSet = new Set(runningSessionIDs);
+  const runningCount = runningSet.size;
 
   function toggleWorkspace(workspaceId: string) {
     setExpandedWorkspaces((current) => {
@@ -117,19 +125,31 @@ export function ConversationList({
 
   const sessionRow = (session: ConversationItem) => {
     const isMenuOpen = openSessionMenuID === session.id;
+    const running = runningSet.has(session.id);
     const hasActions =
       (session.archived ? onUnarchiveSession || onDeleteSession : onArchiveSession) != null;
     return (
       <div key={session.id} className="group relative">
         <button
-          className={`w-full truncate rounded-lg px-2.5 py-1.5 text-left text-sm leading-5 transition-colors ${
+          className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm leading-5 transition-colors ${
+            hasActions ? "pr-7" : ""
+          } ${
             session.id === activeSessionID
               ? "bg-accent-soft font-medium text-accent"
               : "text-muted hover:bg-surface-subtle hover:text-ink"
           }`}
           onClick={() => onSelect(session.id)}
+          title={running ? `${session.title} · 执行中` : session.title}
         >
-          {session.title}
+          <span className="min-w-0 flex-1 truncate">{session.title}</span>
+          {/* 执行中标识：11px 旋转环，只占行尾一小格，标题不会被挤掉几个字。
+              它同时是「这个会话现在还能不能发消息」的唯一可见依据。 */}
+          {running && (
+            <span
+              aria-label="执行中"
+              className="size-3 shrink-0 animate-spin rounded-full border-[1.5px] border-accent/25 border-t-accent"
+            />
+          )}
         </button>
         {hasActions && (
           <button
@@ -246,6 +266,11 @@ export function ConversationList({
                 const isExpanded = expandedWorkspaces.has(workspace.workspaceId);
                 const isActive = workspace.workspaceId === activeWorkspaceID;
                 const workspaceSessions = byWorkspace.get(workspace.workspaceId) ?? [];
+                // 折叠时看不到子会话行，汇总点必须打在父行上，
+                // 否则「这个工作区里有个任务在跑」在侧边栏里完全不可见。
+                const workspaceRunning = workspaceSessions.some((session) =>
+                  runningSet.has(session.id),
+                );
                 const isMenuOpen = openMenuWorkspaceID === workspace.workspaceId;
                 const showActions = (onRenameWorkspace || onDeleteWorkspace) && isExpanded;
                 return (
@@ -270,6 +295,12 @@ export function ConversationList({
                         )}
                         <Folder className="size-4 shrink-0 text-warning" />
                         <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
+                        {!isExpanded && workspaceRunning && (
+                          <span
+                            aria-label="该工作区有任务执行中"
+                            className="size-1.5 shrink-0 animate-pulse rounded-full bg-accent"
+                          />
+                        )}
                       </button>
                       {showActions && (
                         <button
@@ -365,6 +396,15 @@ export function ConversationList({
           </div>
         )}
       </nav>
+
+      {/* 全局汇总：会话行只能告诉你「哪一条在跑」，这里告诉你「一共有几条」。
+          侧边栏折叠时整块会话区消失，那时只剩顶部胶囊可用。 */}
+      {runningCount > 0 && (
+        <div className="mt-2 flex shrink-0 items-center gap-1.5 border-t border-border px-2 pt-2 text-xs text-muted">
+          <span className="size-1.5 animate-pulse rounded-full bg-accent" />
+          {runningCount} 个会话执行中
+        </div>
+      )}
 
       {/* 本次新增：重命名工作区弹窗 */}
       {renameTarget && (

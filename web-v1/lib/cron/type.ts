@@ -13,6 +13,12 @@ export type CronJob = {
   nextRunAt: string | null;
   running: boolean;
   createdAt: string;
+  /** null = 还没跑过。有值且 lastError 非空 = 最近一次失败了。 */
+  lastRunAt: string | null;
+  lastError: string | null;
+  lastErrorAt: string | null;
+  /** 连续失败次数，成功一次即清零。"1" 多为抖动，"3+" 才是坏了。 */
+  consecutiveFailures: number;
 };
 
 export type CronJobListResponse = {

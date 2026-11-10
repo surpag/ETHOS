@@ -248,10 +248,27 @@ export function CronJobsPage() {
                       {job.enabled ? "启用" : "停用"}
                     </span>
                     {job.running ? <span className="rounded bg-warning-soft px-1.5 py-0.5 text-xs text-warning">运行中</span> : null}
+                    {/* 失败是「任务坏了」而不是「这次没跑成」：定时任务没人盯着，
+                        不标出来就等于失败从没发生过（用户只会看到没有产出）。 */}
+                    {job.consecutiveFailures > 0 ? (
+                      <span className="rounded bg-danger-soft px-1.5 py-0.5 text-xs text-danger">
+                        {job.consecutiveFailures >= 2
+                          ? `连续失败 ${job.consecutiveFailures} 次`
+                          : "上次失败"}
+                      </span>
+                    ) : null}
                   </div>
                   <p className="mt-0.5 truncate text-xs text-muted">
                     {job.taskType === "once" ? "一次性" : "周期"} · {job.schedule} · 下次：{formatNextRun(job.nextRunAt)}
+                    {job.lastRunAt ? ` · 上次：${formatNextRun(job.lastRunAt)}` : ""}
                   </p>
+                  {job.lastError ? (
+                    // 单行截断 + title 兜底：错误原文可能很长（带完整 JSON），
+                    // 这里只负责让人一眼看出「哪种错」，细节去日志里查。
+                    <p className="mt-0.5 truncate text-xs text-danger" title={job.lastError}>
+                      {job.lastError}
+                    </p>
+                  ) : null}
                   <p className="mt-0.5 truncate text-xs text-faint">{job.prompt}</p>
                 </div>
                 <button
