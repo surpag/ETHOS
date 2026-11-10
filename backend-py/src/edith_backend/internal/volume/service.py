@@ -52,7 +52,7 @@ class Service:
             return (data or "").strip()
         except Exception as exc:  # noqa: BLE001 - E2B 不可用时降级为空
             logger.warning(
-                "skip unavailable user skill overview user_id=%s volume_id=%s error=%v",
+                "skip unavailable user skill overview user_id=%s volume_id=%s error=%s",
                 user_fingerprint(user_id),
                 volume_id,
                 exc,

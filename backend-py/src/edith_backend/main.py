@@ -22,6 +22,8 @@ from . import config
 from .database import open_database
 from .internal import http_utils
 from .internal.agentrun import Dependencies, Service
+from .internal.agentrun.plan_tools import PlanToolSet
+from .internal.agentrun.run_plan import RunPlanRegistry
 from .internal.conversation import new_module as new_conversation_module
 from .internal.cronadapter import Adapter as CronAdapter
 from .internal.cronjob import create_schema as create_cronjob_schema
@@ -32,8 +34,7 @@ from .internal.gitops.http import HTTP as GitopsHTTP
 from .internal.gitops.orchestrator import WorkspacePush
 from .internal.images import new_module as new_images_module
 from .internal.images.cos import COSConfig
-from .internal.models import DEFAULT_MODEL_ID
-from .internal.models import CustomModels
+from .internal.models import DEFAULT_MODEL_ID, CustomModels
 from .internal.models import create_schema as create_models_schema
 from .internal.models import new_module as new_models_module
 from .internal.sandbox import HTTP as SandboxHTTP
@@ -43,8 +44,16 @@ from .internal.sandbox import Service as SandboxService
 from .internal.sandbox import create_schema as create_sandbox_schema
 from .internal.session import SessionStore
 from .internal.session import create_schema as create_session_schema
+from .internal.session.constraint_store import ConstraintStore
+from .internal.session.plan_store import RunPlanStore
 from .internal.skills import HTTP as SkillsHTTP
 from .internal.skills import Catalog as SkillsCatalog
+from .internal.skills.storage import (
+    SkillScopeStores,
+    SkillStorageService,
+    new_skill_backend,
+    workspace_access_checker,
+)
 from .internal.systemtools import SystemToolSet
 from .internal.tools import ToolRegistry
 from .internal.trace import Store as TraceStore
@@ -73,9 +82,10 @@ from .internal.workspace import (
 )
 
 # 日志基础配置：模块级一次配好，所有 logger 统一格式并携带 request_id
+_LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s [%(request_id)s] %(message)s"
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s [%(request_id)s] %(message)s",
+    format=_LOG_FORMAT,
 )
 
 # 定义一个 ContextVar，用于在整个请求生命周期中传递 request_id
@@ -95,6 +105,23 @@ class RequestIDFilter(logging.Filter):
 # 才对所有经过的 record 生效（含第三方库日志）。
 for _handler in logging.getLogger().handlers:
     _handler.addFilter(RequestIDFilter())
+
+# 日志落盘（可选）：设置 EDITH_LOG_FILE 后，同一格式的日志滚动写入文件
+# （10MB × 5 个备份）。「跨 run 视角」（错误率 / 截断率 / P95 统计）依赖落盘——
+# stdout 随终端滚动、重启即失。未设置时维持纯 stdout（dev 行为不变）。
+_log_file = os.environ.get("EDITH_LOG_FILE")
+if _log_file:
+    from logging.handlers import RotatingFileHandler
+
+    # handler 不建父目录，路径不存在会启动即崩——先建好再挂
+    _log_dir = os.path.dirname(os.path.abspath(_log_file))
+    os.makedirs(_log_dir, exist_ok=True)
+    _file_handler = RotatingFileHandler(
+        _log_file, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
+    )
+    _file_handler.setFormatter(logging.Formatter(_LOG_FORMAT))
+    _file_handler.addFilter(RequestIDFilter())
+    logging.getLogger().addHandler(_file_handler)
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +153,11 @@ async def lifespan(app: FastAPI):
     model_catalog = new_models_module(users.providers, custom_models)
     usage = await new_usage_module(db)
     session_store = SessionStore(db)
-    conversations = new_conversation_module(session_store, usage.reader)
+    plan_store = RunPlanStore(db)
+    # 活跃计划注册表：plan_update 工具写入、run 收尾读取、历史走 plan_store，
+    # 三者共用一个实例，避免出现「工具改了、收尾看不到」的双份状态。
+    run_plans = RunPlanRegistry()
+    conversations = new_conversation_module(session_store, usage.reader, plan_store)
 
     volumes = VolumeService(VolumeStore(db))
     workspaces = WorkspaceStore(db)
@@ -136,12 +167,27 @@ async def lifespan(app: FastAPI):
     workspace_volumes = WorkspaceVolumeService(workspaces, workspace_backend)
     workspace_memories = WorkspaceMemoryStore(db)
 
+    # 用户 Skill 存储：默认本地目录（E2B Volumes 仍是 private beta，未开通会 403）。
+    # 上层（catalog / sandbox / agentrun）只依赖门面，切换后端不需要改业务代码。
+    skill_storage = SkillStorageService(
+        new_skill_backend(os.getenv("EDITH_USER_SKILLS_BACKEND", "local"), volumes)
+    )
+    # 作用域分发点：项目级要绑定 workspace，且**必须**带归属判定器
+    # （`workspace/store.exists` —— 只回 bool，不区分"不存在"与"不属于你"）。
+    # 不传判定器时项目级 fail-closed：读返回 unavailable、写拒绝且不建目录。
+    skill_scopes = SkillScopeStores(
+        os.getenv("EDITH_USER_SKILLS_BACKEND", "local"),
+        user_service=skill_storage,
+        access_checker=workspace_access_checker(workspaces),
+    )
+
     sandboxes = SandboxService(
         db,
         os.getenv("EDITH_E2B_TEMPLATE", "default"),
         volumes,
         workspaces,
         workspace_volumes,
+        skill_scopes=skill_scopes,
     )
     async def _git_identity(user_id: str) -> tuple[str, str]:
         """解析用户的 git 提交身份：用户设置优先，留空回退平台默认。"""
@@ -154,7 +200,7 @@ async def lifespan(app: FastAPI):
         sandboxes, _git_identity, git_push.push, git_push.remote_info
     )
     sandbox_input = SandboxAgentInput(sandboxes)
-    skills = SkillsCatalog(volumes)
+    skills = SkillsCatalog(skill_storage)
     cron_jobs = await new_cronjob_module(db, users.settings)
     images = await new_images_module(
         db,
@@ -166,7 +212,9 @@ async def lifespan(app: FastAPI):
         ),
     )
 
-    tools = ToolRegistry([SystemToolSet(), sandbox_tools, cron_jobs.tools])
+    tools = ToolRegistry(
+        [SystemToolSet(), sandbox_tools, cron_jobs.tools, PlanToolSet(run_plans, plan_store)]
+    )
     mcp_runtime = MCPRuntime(users.mcp)
 
     agent_runs = Service(
@@ -177,13 +225,18 @@ async def lifespan(app: FastAPI):
             store=session_store,
             usage=usage.recorder,
             skills=skills,
+            skill_scopes=skill_scopes,
             images=images.agent_input,
             files=sandbox_input,
             mcp=mcp_runtime,
             memories=workspace_memories,
+            constraints=ConstraintStore(db),
+            plans=run_plans,
+            plan_store=plan_store,
             tool_definitions=tools.tool_definitions(),
             tool_executor=tools,
             traces=traces,
+            skill_flush=sandboxes.flush_skill_sync,
         )
     )
     gateway = new_gateway_service(users.bindings, agent_runs)
@@ -198,7 +251,7 @@ async def lifespan(app: FastAPI):
     app.include_router(build_instruction_router(workspace_memories))
     app.include_router(build_memory_router(workspace_memories))
     app.include_router(conversations.http.router)
-    app.include_router(SkillsHTTP(skills).router)
+    app.include_router(SkillsHTTP(skills, skill_scopes).router)
     app.include_router(SandboxHTTP(sandboxes).router)
     app.include_router(GitopsHTTP(git_push).router)
     app.include_router(cron_jobs.http.router)

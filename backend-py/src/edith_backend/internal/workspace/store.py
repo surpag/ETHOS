@@ -134,6 +134,19 @@ class WorkspaceStore:
                 for r in rows
             ]
 
+    async def exists(self, user_id: str, workspace_id: str) -> bool:
+        """该 workspace 是否属于该 user（Skill 作用域权限校验的唯一判据）。
+
+        刻意只回 bool、不区分「不存在」与「不属于你」：区分开就等于提供一个
+        「这个 id 是否存在」的探测器。也刻意不返回 `local_root`——普通沙箱
+        工作区没有绑定本地目录，用「有 local_root」当判据会把它们全判成无权。
+        """
+        async with self._db.execute(
+            "SELECT 1 FROM workspaces WHERE user_id = ? AND workspace_id = ? LIMIT 1",
+            (user_id, workspace_id),
+        ) as cursor:
+            return await cursor.fetchone() is not None
+
     async def get(self, user_id: str, workspace_id: str) -> dict | None:
         """查询单个工作区（用于聊天页 workspaceId → 名称映射）。"""
         async with self._db.execute(

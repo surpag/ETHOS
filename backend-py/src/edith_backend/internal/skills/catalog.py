@@ -1,15 +1,24 @@
-"""skills 目录：加载内置 Skill 与解析用户 overview.md。
+"""skills 目录：加载内置 Skill 与用户 Skill 索引。
 
 对应 Go 版 internal/skills/catalog.go。
+
+用户 Skill 的存储从「只读 E2B Volume 的 overview.md」改为「经存储门面读取」：
+后端的权威副本可能是宿主目录（Local）或卷（E2B），由 `storage` 决定，
+本模块不感知。`read_user_overview` 的签名与返回形态保持不变（仍是索引原文），
+因此注入到 System Instruction 的文本零变化。
 """
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import yaml
 
+from .storage.base import STATUS_EMPTY, SkillIndex
 from .types import Skill, SkillSummary
+
+logger = logging.getLogger(__name__)
 
 _SYSTEM_DIR = Path(__file__).parent / "system"
 
@@ -87,25 +96,34 @@ def parse_user_overview(content: str) -> list[SkillSummary]:
 
 
 class Catalog:
-    """提供内置 Skill 摘要与用户 overview 读取。"""
+    """提供内置 Skill 摘要与用户 Skill 索引读取。"""
 
-    def __init__(self, volumes=None) -> None:
+    def __init__(self, storage=None) -> None:
         self._skills = load_catalog()
-        self._volumes = volumes
+        # 存储门面（SkillStorageService）。None = 未配置存储，按「没有用户 Skill」处理，
+        # 但要带上原因，不能假装「读到了空目录」。
+        self._storage = storage
 
     def list_system_summaries(self) -> list[SkillSummary]:
         """返回按稳定顺序排列的内置 Skill 摘要。"""
-        return [SkillSummary(name=s.name, description=s.description) for s in self._skills]
+        return [
+            SkillSummary(name=s.name, description=s.description, dir_name=s.id)
+            for s in self._skills
+        ]
+
+    async def read_index(self, user_id: str) -> SkillIndex:
+        """读取用户 Skill 索引（含状态与失败原因）。"""
+        if self._storage is None:
+            return SkillIndex(status=STATUS_EMPTY, reason="skill storage not configured")
+        return await self._storage.read_index(user_id)
 
     async def list_user_summaries(self, user_id: str) -> list[SkillSummary]:
-        """返回当前用户 overview.md 中的自定义 Skill 摘要。"""
-        if self._volumes is None:
-            return []
-        overview = await self._volumes.read_user_overview(user_id)
-        return parse_user_overview(overview)
+        """返回当前用户自定义 Skill 摘要。"""
+        index = await self.read_index(user_id)
+        # 后端可能只给出索引原文（E2B 卷内就是一份 markdown），
+        # 结构化摘要缺失时从原文解析，两条路得到同一份列表。
+        return index.summaries or parse_user_overview(index.text)
 
     async def read_user_overview(self, user_id: str) -> str:
-        """返回当前用户的自定义 Skill 摘要原文。"""
-        if self._volumes is None:
-            return ""
-        return await self._volumes.read_user_overview(user_id)
+        """返回当前用户的自定义 Skill 索引原文（保持旧签名，注入侧不用改）。"""
+        return (await self.read_index(user_id)).text

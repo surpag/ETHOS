@@ -46,10 +46,19 @@ class HTTP:
     async def _existing(self, user_id: str, session_id: str, path: str, allow_root: bool):
         if not user_id.strip() or not session_id.strip():
             raise EDITHError(400, "invalid_request", "userId and sessionId are required")
+        # 文件面板只拿得到 sessionId，工作区上下文要从会话本身取：
+        # `workspace` 与 `skills/project` 是虚拟命名空间，缺 ID 段时按它补全，
+        # 有 ID 段时按它判越权。不给这个上下文，面板展开 `skills/project` 必然失败。
+        current_workspace_id = await self.service.session_workspace_id(user_id, session_id)
         try:
-            real_path = workspace_path(path, allow_root)
+            real_path = workspace_path(
+                path, allow_root, current_workspace_id=current_workspace_id
+            )
         except ValueError as exc:
             raise EDITHError(400, "invalid_path", str(exc))
+        except PermissionError as exc:
+            # 不是「路径写错了」而是「这条路径在本次会话里不存在/不属于你」→ 403
+            raise EDITHError(403, "path_forbidden", str(exc))
         try:
             sandbox = await self.service.existing_workspace(user_id, session_id)
         except SandboxNotFound:

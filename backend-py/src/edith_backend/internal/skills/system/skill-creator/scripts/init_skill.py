@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""在用户 Skills 目录中创建一个 EDITH Skill 骨架。"""
+"""在指定 Skill 根目录中创建一个 EDITH Skill 骨架（默认用户级）。
+
+脚本只负责建目录和写骨架：它**不判断作用域，也不校验目标是否属于
+`skills/custom/` 或当前工作区的 `skills/project/<ws>/`**。作用域必须由调用方判定。
+"""
 
 import argparse
 import json
@@ -65,12 +69,16 @@ def create_skill(name, root, resources, display_name, short_description):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="创建 EDITH 用户 Skill 骨架")
+    parser = argparse.ArgumentParser(description="创建 EDITH Skill 骨架")
     parser.add_argument("skill_name", help="Skill 名称，会规范化为小写连字符格式")
     parser.add_argument(
         "--path",
         default="/home/user/skills/custom",
-        help="用户 Skill 根目录，默认 /home/user/skills/custom",
+        help=(
+            "Skill 根目录。用户级用默认值 /home/user/skills/custom；"
+            "项目级传 /home/user/skills/project/<真实 workspace-id>"
+            "（没有工作区时不要建项目级，也不要用占位符）"
+        ),
     )
     parser.add_argument("--resources", default="", help="可选目录: scripts,references,assets")
     parser.add_argument("--display-name", default="", help="edith.yaml 中的展示名称")
@@ -98,7 +106,9 @@ def main():
         return 1
 
     print(f"已创建 EDITH Skill: {skill_path}")
-    print("下一步: 编辑 SKILL.md，完成后运行 quick_validate.py 校验格式，再运行 sync_overview.py 更新摘要。")
+    print("下一步: 编辑 SKILL.md，完成后运行 quick_validate.py 校验格式。")
+    # 不要提示跑 sync_overview.py：索引由服务端扫描目录派生，
+    # 在沙箱里生成 overview.md 只会造出一份与权威索引无关的假索引。
     return 0
 
 

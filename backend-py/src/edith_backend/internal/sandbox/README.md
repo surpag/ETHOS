@@ -45,7 +45,7 @@ Go 版文件与 Python 文件的对应关系：`service.py ↔ service.go`、`wo
 | 工厂函数 | `tools.py:21-33`（`_tool`）、`tools.py:36-37`（`_guide`） | 按 OpenAI function calling 格式批量生成工具定义（`type/function/name/description/parameters`），并拼接 `WORKSPACE.tool_guide()` 目录指南 |
 | 策略式分发（Dispatcher） | `tools.py:77-86` | `execute` 用 `getattr(self, f"_op_{name}")` 按工具名路由到具体处理方法；未知工具返回错误 JSON 而非抛异常 |
 | 单例常量对象 | `workspace.py:32`（`WORKSPACE = WorkspaceLayout()`） | 模块级共享的冻结 `dataclass`（frozen=True），统一目录约定 |
-| 适配器 | `workspace.py:35-56` | `workspace_path`/`relative_path` 对外部路径做规范化与安全校验（拒绝绝对路径、`..`、空路径按 `allow_root` 放行），是对 E2B 文件路径 API 的薄封装 |
+| 适配器 | `workspace.py` `workspace_path`/`relative_path` | 对外部路径做规范化与安全校验（拒绝绝对路径、`..`、空路径按 `allow_root` 放行）；`workspace/` 与 `skills/project/` 是**虚拟命名空间**，都绑定当前会话的工作区——缺 ID 段时补全，ID 段不匹配时越权，**没有上下文时拒绝** |
 | 未发现状态机 | — | Sandbox 生命周期（超时暂停、自动恢复）由 E2B SDK `SandboxLifecycle(on_timeout="pause", auto_resume=True)` 托管（`service.py:75`），本模块未自行实现状态机 |
 
 ### ③ 关键类/函数
@@ -122,7 +122,7 @@ Go 版文件与 Python 文件的对应关系：`service.py ↔ service.go`、`wo
 
 1. **懒创建 + 恢复**：`workspace()` 先查 `user_sandboxes` 映射——命中则 `AsyncSandbox.connect` 并刷新 `updated_at`；未命中才 `AsyncSandbox.create`（`service.py:53-85`）。创建参数：`template`（来自 `EDITH_E2B_TEMPLATE`）、`metadata={"edith_user_id", "edith_session_id"}`、`lifecycle=SandboxLifecycle(on_timeout="pause", auto_resume=True)`、`volume_mounts={mount.name: CUSTOM_SKILLS_PATH}`（volume 不可用时为 `None`）。`existing_workspace()` 只读不写，供只读 HTTP 使用。
 2. **映射表**：`user_sandboxes`（`schema.py`），字段 `user_id`/`session_id`（复合主键）、`sandbox_id`（UNIQUE）、`created_at`/`updated_at`。
-3. **路径安全**：`workspace_path` 拒绝绝对路径、`..`、空路径（`allow_root=True` 时放行空/`.` 到根目录）；`relative_path` 做反向转换。`AgentInput` 额外要求 `uploads/` 前缀、`normpath` 后路径不变且不含 `..`。下载接口额外限定 `artifacts/` 前缀（403 拒绝其他目录）。
+3. **路径安全**：`workspace_path` 拒绝绝对路径、`..`、空路径（`allow_root=True` 时放行空/`.` 到根目录）；`relative_path` 做反向转换。**两个虚拟命名空间同规则**：`workspace/…` 与 `skills/project/…` 只有一个合法取值「当前会话的工作区」，所以缺 ID 段时**补全**、ID 段不匹配时抛 `PermissionError`、**没有上下文时拒绝**（那时指向哪个工作区无从判断；放行只会多一条绕过归属校验的路）。补全不会让人浏览别人的项目——这段永远等于当前会话的工作区。反过来，原来的「缺 ID 段 → ValueError（必须补 ID）」配合调用点不给上下文，构成了一个任何路径都走不通的死结。`AgentInput` 额外要求 `uploads/` 前缀、`normpath` 后路径不变且不含 `..`。下载接口额外限定 `artifacts/` 前缀（403 拒绝其他目录）。
 4. **工具集**：OpenAI function calling 格式定义 10 个工具（`tools.py:46-75`）；`execute` 用 `getattr` 反射分发，方法命名约定为 `_op_` + 工具名；工具内部异常一律转 `{"error": ...}` JSON 结果返回，不中断 agentrun。
 5. **命令执行**：`sandbox_run_command` 在 `work/` 目录（`cwd=WORKSPACE.work_path()`）前台执行，默认超时 60s、输出截断 32KB；`sandbox_start_process` 后台启动；`sandbox_kill_process` 按 PID 结束；`sandbox_list_processes` 列出进程（cwd 若在根目录内转相对路径）。
 6. **文件读写**：读文件默认截断 32KB（`DEFAULT_READ_LIMIT`）并返回 `truncated` 标记；HTTP 预览检测 NUL 字节以拒绝二进制文件。
@@ -143,12 +143,14 @@ Go 版文件与 Python 文件的对应关系：`service.py ↔ service.go`、`wo
 | --- | --- | --- |
 | `userId`/`sessionId` 缺失 | 抛 `EDITHError(400, "invalid_request", ...)` | `http.py:25-26, 69-70` |
 | 路径非法（绝对路径、`..`、空且不允许根） | `workspace_path` 抛 `ValueError` → 捕获后映射 `EDITHError(400, "invalid_path", ...)` | `http.py:28-30` |
+| 路径越权（`workspace/{别的 ws}/`、`skills/project/{别的 ws}/`、无上下文访问两个命名空间） | `workspace_path` 抛 `PermissionError`：工具层由 `_scope_violation` 转成可读的 tool error（模型可自救），HTTP 层映射 `EDITHError(403, "path_forbidden")`——文件面板展开 `skills/project` 时不再出现那条永远点不好的「重试」 | `tools.py:508`、`http.py:46` |
 | 沙箱映射不存在 | `SandboxNotFound` → 映射 `EDITHError(404, "sandbox_not_found", ...)` | `http.py:33-34` |
 | 预览文件含 NUL 字节（二进制） | `EDITHError(422, "file_not_previewable", ...)` | `http.py:59-60` |
 | 上传无文件/空文件/超 50MB/非法文件名 | `EDITHError(400, "invalid_upload", ...)` | `http.py:71-78` |
 | 上传时沙箱不可用/E2B 异常 | 捕获 `Exception` → `EDITHError(502, "sandbox_files_unavailable", ...)` | `http.py:83-84` |
 | 下载非 `artifacts/` 文件 | `EDITHError(403, "download_not_allowed", ...)` | `http.py:90-91` |
 | 工具执行中任何异常 | `SandboxToolSet.execute` 捕获 `Exception`，转为 `{"error": str(exc)}` JSON 结果返回（降级，不抛给 agentrun） | `tools.py:82-86` |
+| **Skill 正文超出单 run 额度**（3 个 / 60KB） | **不抛异常**：`_charge_skill_body` 返回 `{error, kind: command_error, retryable: false, skill, budget, suggestion}`。原样重试必然再被拒，所以 `retryable=false`；`suggestion` 指向"改读片段 / 依据摘要" | `tools.py:703`（判定入口 `skill_body_key`，`:138`；预算策略在 `skills/budget.py`） |
 | `AgentInput.validate_uploads` 校验失败 | 抛 `ValueError`，由 `agentrun/configuration.py:83-89` 捕获转为 `Error("invalid_request", ...)` | `agent_input.py:36, 41` |
 | Volume 挂载失败（如 E2B 未启用 Volumes） | `volume.Service.mount_for_user` 内部降级返回 `None`，沙箱仍可创建，只是用户自定义 Skills 不可用 | `service.py:70-78`（降级逻辑在 volume 模块） |
 | 请求体校验失败 | FastAPI `RequestValidationError` → 全局 handler 统一 400 `invalid_request`（`http_utils.py`） | 全局，非本模块 |

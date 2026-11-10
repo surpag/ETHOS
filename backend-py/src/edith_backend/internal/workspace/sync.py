@@ -437,10 +437,21 @@ async def sync_sandbox_to_local(
     failure_limit: int | None = None,
     pull_binaries: bool | None = None,
     state_dir: Path | None = None,
+    mount: str | None = None,
+    stats: dict | None = None,
+    verify_content: bool = False,
 ) -> int:
     """把沙箱 workspace/{id}/[prefix/] 下与本地不一致的文件下载到 local_root，返回更新文件数。
 
     prefix：本地目录在沙箱文件树中的前缀（"选文件夹上传"创建的工作区会多一层目录名）。
+    mount：直接指定沙箱侧同步根，覆盖 `workspace/{id}/[prefix/]` 的默认推导——
+           用户 Skill 目录（`/home/user/skills/custom`）复用的就是同一条同步逻辑。
+    stats：可选的出参字典，回填本次同步的观测数据（deleted / failures / aborted /
+           list_failed / error）。同步函数**不抛异常**（返回 0），没有出参时调用方
+           无法区分「没有变化」与「整次失败」——那正是「静默降级」的来源。
+    verify_content：跳过「大小一致即认为未变」的快捷判断，逐个读回比对字节。
+           工作区里大文件多，快捷判断是性能关键；但用户 Skill 全是 KB 级 markdown，
+           **等长改写**（如把描述里的版本号改一位）用大小判断会漏掉，所以 Skill 强制比对。
 
     护栏（本函数是「每个写类工具调用后」都会跑的路径，必须便宜且可预期）：
     - **免下载比对**：本地已有且 size 一致 → 直接用 `files.list` 的元数据跳过，不读字节；
@@ -457,11 +468,14 @@ async def sync_sandbox_to_local(
     failure_limit = SYNC_FAILURE_LIMIT if failure_limit is None else failure_limit
     pull_binaries = SYNC_PULL_BINARY_FILES if pull_binaries is None else pull_binaries
 
-    mount = _mount(workspace_id, prefix)
+    mount = _mount(workspace_id, prefix) if mount is None else mount
     try:
         entries = await sandbox.files.list(mount, depth=_MAX_DEPTH)
     except Exception as exc:  # noqa: BLE001 - 目录不存在/沙箱不可用：跳过
         logger.warning("list sandbox %s failed: %s", mount, exc)
+        if stats is not None:
+            stats["list_failed"] = True
+            stats["error"] = str(exc)
         return 0
 
     changed = 0
@@ -537,7 +551,9 @@ async def sync_sandbox_to_local(
             continue
         target = local_root / rel
         # ① 免下载比对：本地已有且大小一致 → 不发起任何远端读取
-        if _matches_local_size(target, remote_size):
+        #    （verify_content=True 时跳过这一步，改为读回逐字节比对——
+        #     等长改写靠大小判断不出来，Skill 目录必须按内容判等）
+        if not verify_content and _matches_local_size(target, remote_size):
             skipped_same += 1
             synced.add(rel)  # 两侧一致即共识，纳入删除传播基线
             continue
@@ -600,6 +616,14 @@ async def sync_sandbox_to_local(
         )
     else:
         logger.debug("B2 sync ws=%s no-op", workspace_id)
+    if stats is not None:
+        stats["deleted"] = deleted
+        stats["failures"] = failures
+        stats["aborted"] = aborted
+        # 「被跳过」和「被同步」是两件事：Skill 的目录级替换必须能区分出
+        # 「候选不完整」——少回拉一个文件就等于替换后少一个文件。
+        stats["skipped_large"] = skipped_large
+        stats["skipped_binary"] = skipped_binary
     return changed
 
 
@@ -613,8 +637,16 @@ async def sync_local_to_sandbox(
     max_file_bytes: int = 10 * 1024 * 1024,
     failure_limit: int | None = None,
     state_dir: Path | None = None,
+    mount: str | None = None,
+    stats: dict | None = None,
+    verify_content: bool = False,
 ) -> int:
     """把本地目录中新增/修改的文件推送到沙箱 workspace/{id}/[prefix/]，返回上传文件数。
+
+    mount / stats 语义同 `sync_sandbox_to_local`（Skill 目录复用同一条同步，
+    并用出参把「没变化」与「整次失败」区分开）。
+    verify_content：大小相同也读回比对字节——等长改写（KB 级 markdown 很常见）
+    靠大小判断会被当成「没变」，导致沙箱里一直是旧版本。
 
     以"本地与沙箱大小不一致即上传"为判定（B3 语义：本地为准），
     忽略 `.edithignore` 与超过 max_file_bytes 的大文件。
@@ -627,7 +659,7 @@ async def sync_local_to_sandbox(
     if not local_root.is_dir():
         return 0
     failure_limit = SYNC_FAILURE_LIMIT if failure_limit is None else failure_limit
-    mount = _mount(workspace_id, prefix)
+    mount = _mount(workspace_id, prefix) if mount is None else mount
     ignore = _load_ignore(local_root)
 
     # 本地现存文件全集（排除忽略项）：既是推送源，也是删除传播的判定依据
@@ -702,10 +734,23 @@ async def sync_local_to_sandbox(
             continue
         remote = f"{mount}/{rel}"
         # 免下载比对：远端已存在且大小一致 → 视为一致，不上传
-        if remote_sizes is not None and remote_sizes.get(remote) == size:
+        same_size = remote_sizes is not None and remote_sizes.get(remote) == size
+        if same_size and not verify_content:
             skipped_same += 1
             synced.add(rel)  # 两侧一致即共识
             continue
+        if same_size:
+            # 等长改写：读回比对字节，只有真的不同才上传
+            try:
+                raw = await sandbox.files.read(
+                    remote, format="bytes", request_timeout=SYNC_READ_TIMEOUT_S
+                )
+                if bytes(raw) == path.read_bytes():
+                    skipped_same += 1
+                    synced.add(rel)
+                    continue
+            except Exception as exc:  # noqa: BLE001 - 比对失败就老实上传
+                logger.debug("read sandbox %s for compare failed: %s", remote, exc)
         try:
             await sandbox.files.write(remote, path.read_bytes())
             changed += 1
@@ -748,6 +793,13 @@ async def sync_local_to_sandbox(
         )
     else:
         logger.debug("B3 sync ws=%s no-op (unchanged=%d)", workspace_id, skipped_same)
+    if stats is not None:
+        stats["deleted"] = deleted
+        stats["failures"] = failures
+        stats["aborted"] = aborted
+        # B3 的 list 失败是「降级为不比对直接推」，推送本身仍可能成功，
+        # 因此与 B2 的 list_failed（整次读不到远端）分开记录，避免把成功报成故障。
+        stats["push_uncompared"] = remote_sizes is None
     return changed
 
 
@@ -767,7 +819,12 @@ def _load_ignore(local_root: Path) -> list[str]:
 
 
 def is_ignored(rel: str, patterns: list[str]) -> bool:
-    """是否忽略该相对路径（内置忽略 + .edithignore）。"""
+    """是否忽略该相对路径（内置忽略 + .edithignore）。
+
+    模式形态刻意只有三种，够用且可预测：`后缀*`（尾部通配，匹配任一目录段）、
+    `*后缀`（扩展名）、普通名（精确段）。尾部通配是后加的：Skill 存储的
+    `.staging-<ts>/` / `.old-<ts>/` 名字里带时间戳，没法写成固定名。
+    """
     parts = rel.split("/")
     for pat in DEFAULT_IGNORES + patterns:
         p = pat.rstrip("/")
@@ -775,6 +832,10 @@ def is_ignored(rel: str, patterns: list[str]) -> bool:
             continue
         if p.startswith("*"):
             if rel.endswith(p[1:]):
+                return True
+        elif p.endswith("*"):
+            prefix = p[:-1]
+            if rel.startswith(prefix) or any(part.startswith(prefix) for part in parts):
                 return True
         elif p in parts or rel == p or rel.startswith(p + "/"):
             return True
