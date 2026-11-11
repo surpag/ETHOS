@@ -1,12 +1,11 @@
 import os
 
-from dotenv import load_dotenv
 from e2b import Template, default_build_logger
 from template import template
 
-from build_common import report, resolve_template_name
+from build_common import load_build_env, report, resolve_template_name
 
-load_dotenv()
+load_build_env()
 
 
 if __name__ == "__main__":
