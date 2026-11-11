@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 from e2b import Template, default_build_logger
 from template import template
 
+from build_common import report, resolve_template_name
+
 load_dotenv()
 
 
@@ -11,9 +13,12 @@ if __name__ == "__main__":
     if not os.getenv("E2B_API_KEY"):
         raise RuntimeError("E2B_API_KEY is required in .env")
 
-    template_name = os.getenv("EDITH_E2B_TEMPLATE", "edith-v0-1-5")
-    Template.build(
+    # 开发构建固定 `-dev` 后缀；后端要连它就把 EDITH_E2B_TEMPLATE 设成带 -dev 的名字
+    template_name = f"{resolve_template_name()}-dev"
+    print(f"building template: {template_name}")
+    build = Template.build(
         template,
-        f"{template_name}-dev",
+        template_name,
         on_build_logs=default_build_logger(),
     )
+    report(build, template_name)

@@ -11,26 +11,52 @@
 
 ## 配置
 
-1. 在项目根目录创建 `.env` 文件，或设置环境变量：
+1. 在项目根目录创建 `.env` 文件，或设置环境变量（两个都必须有）：
    ```
    E2B_API_KEY=your_api_key_here
+   EDITH_E2B_TEMPLATE=edith-sandbox-python
    ```
+
+`EDITH_E2B_TEMPLATE` **不是可选参数**：它就是模板在 E2B 账号里的名字，后端用同一个
+变量去 `AsyncSandbox.create(template=...)`。两边取值必须逐字相同，否则模板建成功、
+沙箱却永远 404 `template 'xxx' not found`（2026-11-11 事故）。
 
 ## 安装依赖
 
 ```bash
-pip install e2b
+# 本机
+pip install "e2b>=2.35.0" python-dotenv
+
+# 服务器（Ubuntu，无 Windows 的 .venv/Scripts/ 结构）
+python3 -m venv .venv && . .venv/bin/activate
+pip install -U "e2b>=2.35.0" python-dotenv
 ```
 
 ## 构建 Template
 
 ```bash
-# 开发环境
-make e2b:build:dev
+# 开发环境（名字会加 -dev 后缀）
+make build-dev
 
 # 生产环境
-make e2b:build:prod
+make build-prod
 ```
+
+没有 make 时等价于 `python3 build_prod.py`。**注意**：目标名不能带冒号——旧的
+`make e2b:build:prod` 在 GNU make 下会报 `target pattern contains no '%'` 并中止。
+
+构建会用**当前 key 所属的 E2B 团队**落库。换 key（换账号/团队）之后模板即不可见，
+必须用新 key 重建；模板名在客户端不变。
+
+构建完成后用同一把 key 自检，再重启后端（模板名是后端启动时读入的）：
+
+```bash
+python -c "from e2b import Template; print(Template.exists('edith-sandbox-python'))"
+docker compose restart backend
+```
+
+`Template.exists()` 返回 `False` 就是「这个账号里没有这个名字」；key 本身无效时它会
+直接抛 `AuthenticationException`，不会静默返回 `False`，所以两条信息可以互证。
 
 ## 在 Sandbox 中使用 Template
 
@@ -65,7 +91,8 @@ Template 创建的 Sandbox 会预置：
 └─ custom/    ← 用户级 Skills Volume 的挂载点
 ```
 
-`EDITH_E2B_TEMPLATE` 同时控制 `.env` 中的生产版本和开发版本前缀。当前版本为 `edith-v0-1-5`，开发版本会构建为 `edith-v0-1-5-dev`。
+`EDITH_E2B_TEMPLATE` 同时控制生产版本名和开发版本前缀（开发版多加 `-dev`）。
+本仓库当前使用 `edith-sandbox-python`（后端根 `.env` 取值须一致）。
 
 ## 下一步
 
