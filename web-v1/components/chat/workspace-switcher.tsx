@@ -1,6 +1,5 @@
 "use client";
 
-import { useAuth } from "@clerk/nextjs";
 import { Check, ChevronDown, Folder, FolderPlus, LoaderCircle, Trash2 } from "lucide-react";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 
@@ -60,7 +59,6 @@ export const WorkspaceSwitcher = forwardRef<WorkspaceSwitcherHandle, Props>(func
   { workspaceId, onSelect, onWorkspacesChanged },
   ref,
 ) {
-  const { userId } = useAuth(); // 方案 C：直传后端需要 userId（原 BFF 从 Clerk 注入）
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [open, setOpen] = useState(false);
   const [create, setCreate] = useState<CreateState | null>(null);
@@ -261,18 +259,12 @@ export const WorkspaceSwitcher = forwardRef<WorkspaceSwitcherHandle, Props>(func
         relPath: file.webkitRelativePath ?? file.name,
         blob: file,
       }));
-      // 本次新增：诊断日志——过滤前后数量对比，确认浏览器 FileList 是否被枚举截断
-      console.log(
-        "[workspace-upload] total files:",
-        items.length,
-        "after filter:",
-        filterWorkspaceFiles(items).length,
-      );
-      if (!userId) {
-        setMessage("无法获取当前用户身份，请重新登录。");
+      const filtered = filterWorkspaceFiles(items);
+      if (filtered.length === 0) {
+        setMessage("所选文件夹里没有可上传的文件（node_modules 等目录已跳过）。");
         return;
       }
-      const result = await uploadWorkspaceFiles(workspaceId, items, userId);
+      const result = await uploadWorkspaceFiles(workspaceId, items);
       setWorkspaces((current) =>
         current.map((w) =>
           w.workspaceId === workspaceId
